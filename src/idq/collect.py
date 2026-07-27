@@ -1,0 +1,169 @@
+"""Collection. Talks to providers, writes the cache, and does nothing else.
+
+Scoring lives in score.py and never runs here. A scoring bug must never cost a
+re-collection.
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from dataclasses import dataclass
+
+from . import __version__
+from .adapters.base import Question
+from .cache import ResponseCache, build_record, make_cache_key
+from .config import RunConfig
+from .images import build_manifest, load_and_encode, manifest_hash, manifest_to_json
+from .prompts import IMAGE_CONDITIONS, format_options_block, get_prompt
+from .providers.base import RetryableError, TerminalError
+
+
+@dataclass
+class CollectionStats:
+    considered: int = 0
+    cached_hits: int = 0
+    calls_made: int = 0
+    successes: int = 0
+    terminal_errors: int = 0
+    retryable_failures: int = 0
+
+    def as_dict(self) -> dict:
+        return dict(self.__dict__)
+
+
+def git_sha(default: str = "") -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip()
+    except Exception:
+        return default
+
+
+def render_prompt(question: Question, cfg: RunConfig) -> tuple[str, str, str]:
+    template = get_prompt(cfg.prompt_key)
+    stem = question.stem_for(cfg.condition)
+    options_block = format_options_block(question.letters, question.option_texts)
+    system, user = template.render(question=stem, options_block=options_block)
+    return system, user, template.hash
+
+
+def collect(
+    questions: list[Question],
+    cfg: RunConfig,
+    provider,
+    cache: ResponseCache,
+    *,
+    image_root: str = "",
+    dry_run: bool = False,
+    limit: int | None = None,
+    progress_every: int = 25,
+    verbose: bool = True,
+) -> CollectionStats:
+    stats = CollectionStats()
+    sha = git_sha()
+    needs_images = cfg.condition in IMAGE_CONDITIONS
+
+    todo = questions[:limit] if limit else questions
+
+    for i, q in enumerate(todo, start=1):
+        stats.considered += 1
+
+        system, user, prompt_hash = render_prompt(q, cfg)
+
+        refs = []
+        mhash = ""
+        if needs_images:
+            try:
+                refs = build_manifest(q.image_paths, root=image_root)
+            except FileNotFoundError as exc:
+                if verbose:
+                    print(f"  skip {q.question_id}: {exc}", file=sys.stderr)
+                continue
+            mhash = manifest_hash(refs, cfg.corruption, cfg.corruption_severity)
+
+        key = make_cache_key(
+            key_fields=cfg.key_fields(),
+            question_id=q.question_id,
+            prompt_hash=prompt_hash,
+            image_manifest_hash=mhash,
+        )
+
+        if cache.has(key):
+            stats.cached_hits += 1
+            continue
+
+        if dry_run:
+            if verbose and i == 1:
+                print("--- dry run: first rendered prompt ---")
+                print(f"[system]\n{system}\n")
+                print(f"[user]\n{user}\n")
+                print(f"[images] {[r.camera for r in refs]}")
+                print(f"[cache_key] {key}")
+                print("--- end ---")
+            continue
+
+        images = None
+        if refs:
+            images = load_and_encode(
+                refs,
+                corruption=cfg.corruption,
+                severity=cfg.corruption_severity,
+                seed=cfg.seed,
+            )
+
+        stats.calls_made += 1
+        try:
+            resp = provider.complete(
+                system=system,
+                user=user,
+                images=images,
+                model_string=cfg.model.model_string,
+                temperature=cfg.decode.temperature,
+                top_p=cfg.decode.top_p,
+                max_tokens=cfg.decode.max_tokens,
+                seed=cfg.seed,
+                thinking_effort=cfg.decode.thinking_effort,
+            )
+        except TerminalError as exc:
+            # Cached as terminal. Retrying a malformed request or a refusal on
+            # every resume burns budget on a call that can never succeed.
+            stats.terminal_errors += 1
+            cache.append(
+                build_record(
+                    cache_key=key, status="terminal_error", question=q, cfg=cfg,
+                    prompt_hash=prompt_hash, system=system, user=user,
+                    error_reason=exc.reason, error_message=str(exc),
+                    image_manifest=manifest_to_json(refs),
+                    harness_version=__version__, git_sha=sha,
+                )
+            )
+            continue
+        except RetryableError as exc:
+            # NOT cached. Next run picks it up again.
+            stats.retryable_failures += 1
+            if verbose:
+                print(f"  retryable failure on {q.question_id}: {exc}", file=sys.stderr)
+            continue
+
+        stats.successes += 1
+        cache.append(
+            build_record(
+                cache_key=key, status="success", question=q, cfg=cfg,
+                prompt_hash=prompt_hash, system=system, user=user, response=resp,
+                image_manifest=manifest_to_json(refs),
+                harness_version=__version__, git_sha=sha,
+            )
+        )
+
+        if verbose and progress_every and stats.calls_made % progress_every == 0:
+            print(
+                f"  [{i}/{len(todo)}] calls={stats.calls_made} "
+                f"ok={stats.successes} terminal={stats.terminal_errors} "
+                f"retryable={stats.retryable_failures}",
+                file=sys.stderr,
+            )
+
+    return stats
