@@ -5,8 +5,18 @@ results/
 
 # Never commit credentials. Keys come from the environment only.
 .env
+.env.*
 *.key
+*.pem
 secrets*
+credentials*
+
+# Local tool/editor state. Not secret by design, but it records local paths and
+# per-machine settings that have no business in a public repo.
+.claude/
+.vscode/
+.idea/
+*.code-workspace
 
 __pycache__/
 *.py[cod]
