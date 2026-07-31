@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from .adapters import DriveLMAdapter, FixtureAdapter, summarize
@@ -22,10 +23,19 @@ from .score import read_rows, score_records, write_rows
 
 
 def _adapter(args):
-    if args.adapter == "drivelm":
+    if args.adapter in ("drivelm", "drivelm_converted"):
         if not args.data:
-            sys.exit("--data is required for the drivelm adapter")
+            sys.exit(f"--data is required for the {args.adapter} adapter")
+    if args.adapter == "drivelm":
         return DriveLMAdapter(path=args.data)
+    if args.adapter == "drivelm_converted":
+        from .convert import DriveLMConvertedAdapter
+
+        return DriveLMConvertedAdapter(
+            path=args.data,
+            seed=getattr(args, "convert_seed", 20260731),
+            n_per_template=getattr(args, "n_per_template", None) or None,
+        )
     return FixtureAdapter(n=args.n_fixture, seed=args.fixture_seed)
 
 
@@ -103,6 +113,14 @@ def cmd_collect(args) -> None:
                       "cache_size": len(cache)}, indent=2, default=str))
 
 
+def cmd_probe(args) -> None:
+    from .probe import probe
+
+    if not args.data:
+        sys.exit("--data is required")
+    print(json.dumps(probe(args.data, n_examples=args.n_examples), indent=2))
+
+
 def cmd_pilot(args) -> None:
     from .pilot import run_pilot
 
@@ -140,9 +158,48 @@ def cmd_score(args) -> None:
     print(json.dumps({"scored_rows": len(rows), "out": args.out}, indent=2))
 
 
+def _primary(args) -> tuple[str, str] | None:
+    """--primary "inkling,qwen3-235b" designates the preregistered comparison.
+
+    It is exempt from Holm correction, so naming it on the command line after
+    seeing the results would be p-hacking. It belongs in the runbook before
+    collection starts.
+    """
+    if not args.primary:
+        return None
+    parts = [p.strip() for p in args.primary.split(",") if p.strip()]
+    if len(parts) != 2:
+        sys.exit('--primary takes exactly two model labels, e.g. --primary "inkling,other"')
+    return (parts[0], parts[1])
+
+
 def cmd_analyze(args) -> None:
     rows = read_rows(args.scored)
-    print(summarize_run(rows).to_json())
+    report = summarize_run(
+        rows,
+        primary_comparison=_primary(args),
+        baseline_condition=args.baseline,
+        degraded_condition=args.degraded,
+        alpha=args.alpha,
+        n_boot=args.n_boot,
+    )
+    if args.markdown:
+        from .tables import render_markdown
+
+        os.makedirs(os.path.dirname(os.path.abspath(args.markdown)) or ".", exist_ok=True)
+        with open(args.markdown, "w", encoding="utf-8") as fh:
+            fh.write(render_markdown(report.sections, title=args.title))
+
+    if args.json_out:
+        os.makedirs(os.path.dirname(os.path.abspath(args.json_out)) or ".", exist_ok=True)
+        with open(args.json_out, "w", encoding="utf-8") as fh:
+            fh.write(report.to_json())
+
+    print(report.to_json())
+    # Warnings go to stderr as well as into the report, so they survive a
+    # redirect of stdout into a file nobody reads again.
+    for w in report.sections.get("warnings") or []:
+        print(f"warning: {w}", file=sys.stderr)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -150,10 +207,13 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def common(sp):
-        sp.add_argument("--adapter", default="fixture", choices=["fixture", "drivelm"])
+        sp.add_argument("--adapter", default="fixture",
+                        choices=["fixture", "drivelm", "drivelm_converted"])
         sp.add_argument("--data", default="")
         sp.add_argument("--n-fixture", type=int, default=400)
         sp.add_argument("--fixture-seed", type=int, default=1234)
+        sp.add_argument("--convert-seed", type=int, default=20260731)
+        sp.add_argument("--n-per-template", type=int, default=0)
 
     sp = sub.add_parser("inspect"); common(sp); sp.set_defaults(func=cmd_inspect)
 
@@ -184,6 +244,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--usd-out", type=float, default=None)
     sp.add_argument("--price-date", default="")
     sp.set_defaults(func=cmd_collect)
+
+    sp = sub.add_parser("probe")
+    sp.add_argument("--data", default="")
+    sp.add_argument("--n-examples", type=int, default=3)
+    sp.set_defaults(func=cmd_probe)
 
     sp = sub.add_parser("pilot"); common(sp)
     sp.add_argument("--provider", default="mock", choices=["mock", "openai_compat"])
@@ -222,6 +287,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("analyze")
     sp.add_argument("--scored", default="results/scored.jsonl")
+    sp.add_argument("--primary", default="",
+                    help='preregistered primary comparison, e.g. "inkling,other"; '
+                         "exempt from Holm correction")
+    sp.add_argument("--baseline", default="clean",
+                    help="baseline condition for the robustness comparison")
+    sp.add_argument("--degraded", default="corrupt",
+                    help="degraded condition for the robustness comparison")
+    sp.add_argument("--alpha", type=float, default=0.05)
+    sp.add_argument("--n-boot", type=int, default=10000)
+    sp.add_argument("--markdown", default="",
+                    help="also write paper-ready Markdown tables to this path")
+    sp.add_argument("--json-out", default="", help="also write the JSON report to this path")
+    sp.add_argument("--title", default="Results")
     sp.set_defaults(func=cmd_analyze)
 
     return p

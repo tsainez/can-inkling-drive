@@ -48,6 +48,7 @@ def score_records(records: Iterable[dict], questions: Iterable[Question]) -> lis
 def _row(rec, gold, *, predicted, method, correct, valid, candidates=None) -> dict:
     usage = rec.get("usage") or {}
     text = rec.get("response_text") or ""
+    decode = rec.get("decode") or {}
     return {
         "cache_key": rec.get("cache_key"),
         "question_id": rec.get("question_id"),
@@ -55,7 +56,19 @@ def _row(rec, gold, *, predicted, method, correct, valid, candidates=None) -> di
         "category": rec.get("category"),
         "n_options": rec.get("n_options"),
         "model_label": rec.get("model_label"),
+        "model_string": rec.get("model_string"),
         "served_by": rec.get("served_by"),
+        # Quantization, thinking effort and the harness commit are carried
+        # through to the scored row because the paper's serving-configuration
+        # and reproducibility tables are built from these rows, not from the
+        # cache. Losing them here would mean re-reading the cache to write an
+        # appendix, or worse, reporting "unknown" for something we recorded.
+        "quantization": rec.get("quantization", "unknown"),
+        "thinking_effort": decode.get("thinking_effort"),
+        "max_tokens": decode.get("max_tokens"),
+        "temperature": decode.get("temperature"),
+        "harness_version": rec.get("harness_version", ""),
+        "git_sha": rec.get("git_sha", ""),
         "usd_per_1m_input": rec.get("usd_per_1m_input"),
         "usd_per_1m_output": rec.get("usd_per_1m_output"),
         "price_quoted_on": rec.get("price_quoted_on", ""),

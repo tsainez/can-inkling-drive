@@ -11,18 +11,30 @@ support for putting a language model in a control loop.
 
 ## Status
 
-- **Step 1 — done.** Harness built, 111 tests passing offline with no API key.
+- **Step 1 — done.** Harness built, 146 tests passing offline with no API key.
 - **Step 2 — done.** Provider selected: Baseten. `reasoning_tokens` confirmed
   available, so RQ2 does not need a proxy metric. See
   [docs/provider-selection.md](docs/provider-selection.md).
 - **Step 3 — ready to run.** DriveLM v1.1 **train** split (val ships without
   gold answers). See [docs/runbook.md](docs/runbook.md).
-- **Steps 4–5** — pilot and scale-up, not started.
+- **Analysis — done.** All four research questions are computed and rendered as
+  paper-ready tables: pairwise McNemar with Holm correction and one exempt
+  preregistered comparison (RQ1), the accuracy-versus-thinking-tokens Pareto
+  frontier (RQ2), the three-way grounding decomposition (RQ3), and paired
+  corruption robustness plus a ranking-stability audit (RQ4).
+- **Steps 4–5** — pilot and scale-up, not started. These are the first steps
+  that need an API key and cost money.
 
 ```bash
 pip install -e ".[dev]"
-pytest                      # 111 tests, no network, no key
+pytest                      # 146 tests, no network, no key
 ```
+
+**Before the first paid call:** commit the repository. `git_sha` goes into every
+cache record, and an uncommitted tree writes an empty one, which silently voids
+the reproducibility claim in the methods section. And write the primary
+comparison into the runbook *before* collecting — it is exempt from multiplicity
+correction, which is only defensible if it was chosen in advance.
 
 ## Research questions
 
@@ -102,6 +114,13 @@ python -m idq.cli collect --provider mock --condition blind_tags --n-fixture 400
 python -m idq.cli score   --cache results/cache.jsonl --out results/scored.jsonl
 python -m idq.cli analyze --scored results/scored.jsonl
 
+# Full analysis: JSON report plus the paper's Markdown tables. The primary
+# comparison is exempt from Holm correction, so it belongs in the runbook
+# before collection, not on the command line after seeing the numbers.
+python -m idq.cli analyze --scored results/scored.jsonl \
+  --primary "inkling,<named baseline>" \
+  --markdown results/tables.md --json-out results/report.json
+
 # Dry run against a real provider: renders prompts, makes no calls
 python -m idq.cli collect --adapter drivelm --data data/drivelm/train.json \
   --provider openai_compat --base-url https://api.example.com/v1 \
@@ -119,7 +138,7 @@ wrong. If scoring were misaligned, or the parser favoured one option position,
 or unparseable output were scored as correct, this test fails. Every other
 number the harness produces is only trustworthy because this one holds.
 
-## Two bugs deliberately guarded against
+## Traps deliberately guarded against
 
 1. **PIL's `ImageFilter.Kernel` accepts only 3×3 and 5×5.** Motion blur is
    implemented in numpy as a normalized line kernel, so severity 5 can use a
@@ -127,6 +146,18 @@ number the harness produces is only trustworthy because this one holds.
 2. **A naive option regex drops options whose text starts with A–D.** "C. Back
    up" vanishes when `[^A-D]` cannot match the B in "Back". Option boundaries
    are detected positionally instead, and a test asserts "Back up" survives.
+3. **An efficiency plot can silently compare two different quantities.** If one
+   model reports `reasoning_tokens` and another only reports
+   `completion_tokens`, plotting each on whatever it happens to provide is not a
+   comparison. When the metric is not uniform across models, every model falls
+   back to completion tokens and the substitution is recorded in the report.
+4. **A rank flip is not evidence that a ranking changed.** Two models that are
+   not significantly separated will swap places on resampling alone. RQ4 counts
+   only inversions where the pair is significantly ordered one way clean and the
+   opposite way corrupted; the rest are reported as consistent with noise.
+5. **A dollar figure with no quote date is not reportable.** Prices travel in
+   each record with their quote date and provider, and an unstamped price is
+   flagged in the report and marked in the cost table itself.
 
 ## IP boundary
 

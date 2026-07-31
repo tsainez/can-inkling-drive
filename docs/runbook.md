@@ -60,7 +60,31 @@ Unzip so paths resolve as `<image_root>/samples/CAM_FRONT/<file>.jpg`, then pass
 
 ## Step 4: the 20-call pilot
 
-Dry run first — renders prompts, makes zero calls, costs nothing:
+### Pre-flight — do these before the first paid call
+
+Both of these fail silently. Nothing errors; the numbers just turn out to be
+unreportable afterwards, and the only fix is to collect again and pay again.
+
+- [ ] **Commit the repository.** `git_sha` comes from `git rev-parse --short HEAD`
+      and goes into every cache record. An uncommitted tree writes an empty
+      string, and the methods section's claim that any number traces back to a
+      harness revision becomes false for the entire run.
+- [ ] **Write the primary comparison down, here, before collecting.** It is
+      exempt from Holm correction, which is only defensible if it was chosen in
+      advance. Picking it after seeing the results is p-hacking with extra steps.
+
+      ```
+      primary comparison: inkling vs <named baseline>   # decided YYYY-MM-DD, pre-collection
+      ```
+
+- [ ] **Decide the thinking-effort value and never change it.** It is in the
+      cache key, so a change forces re-collection rather than silently mixing
+      settings.
+
+`idq.cli analyze` warns about the first two, but it warns after the money is
+gone. That is why they are a checklist and not a validation step.
+
+### Dry run first — renders prompts, makes zero calls, costs nothing:
 
 ```bash
 export BASETEN_API_KEY=...            # environment only, never in a file
@@ -129,9 +153,51 @@ for c in blind_tags blind_notags; do
     --cache results/cache.jsonl
 done
 
-python -m idq.cli score   --adapter drivelm --data data/... --cache results/cache.jsonl --out results/scored.jsonl
-python -m idq.cli analyze --scored results/scored.jsonl
+python -m idq.cli score --adapter drivelm --data data/... \
+  --cache results/cache.jsonl --out results/scored.jsonl
+
+python -m idq.cli analyze --scored results/scored.jsonl \
+  --primary "inkling,<named baseline>" \
+  --markdown results/tables.md --json-out results/report.json
 ```
 
 Interrupt any of this freely. The cache is append-only with an fsync per
 record; rerunning the same command resumes and re-pays for nothing.
+
+`--markdown` writes the paper's tables — main results, all four RQ sections, and
+the two appendices — generated from the same report rather than retyped. Scoring
+and analysis cost nothing, so rerun them as often as you like.
+
+### What analyze warns about
+
+Warnings print to stderr and lead the Markdown document, because each one makes
+some number unquotable until it is resolved:
+
+| warning | what it means |
+|---|---|
+| `no git_sha on any record` | Collected from an uncommitted tree. Not traceable. |
+| `more than one value of served_model` | The provider swapped builds mid-run. Those records are not one condition. |
+| `reasoning_tokens never reported` | RQ2 is on a `completion_tokens` proxy and the paper must say so. |
+| `priced with no price_quoted_on` | A dollar figure with no quote date. Not reportable. |
+| `invalid-output rate > 10%` | Raise `--max-tokens`; a truncated reasoning chain never reaches its answer line. |
+| `no primary comparison designated` | Every pair is being Holm-corrected, including the one you care about. |
+
+### Reading the RQ4 output
+
+`robustness` gives the per-model accuracy loss. Two fields do work the raw delta
+cannot:
+
+- `above_chance_retention` — the share of *above-chance* accuracy that survives.
+  0.90 → 0.50 and 0.50 → 0.30 are both −20pp, but the first keeps 38% of its
+  signal and the second keeps 8%. Blank when baseline accuracy is at or below
+  chance, because then there was no signal to retain.
+- `invalid_rate_delta` — corruption can make a model stop answering rather than
+  answer wrongly. An accuracy-only comparison cannot see the difference.
+
+`ranking_stability` answers the actual RQ4 question. `kendall_tau_b` says how far
+the ordering moved; **no p-value is attached**, because a rank test on five
+models has almost no power and a non-significant tau would say nothing. The
+load-bearing field is `n_supported_inversions`: an order flip only counts if the
+pair was significantly ordered one way clean and significantly the other way
+corrupted. Two models half a point apart that swap places were never
+distinguishable, and `ranking_preserved` ignores them.
