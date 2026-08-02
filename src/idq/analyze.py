@@ -795,8 +795,9 @@ def provenance(rows: Sequence[dict]) -> dict:
     """
     out: dict = {}
     fields = (
-        "model_string", "served_model", "served_by", "quantization",
-        "thinking_effort", "max_tokens", "temperature", "prompt_key",
+        "model_string", "served_model", "served_by", "served_provider", "quantization",
+        "thinking_effort", "max_tokens", "temperature", "reasoning_format",
+        "include_sampling_params", "max_tokens_field", "prompt_key", "cohort_id",
         "harness_version", "git_sha",
     )
     for model in sorted({r.get("model_label") for r in rows if r.get("model_label")}):

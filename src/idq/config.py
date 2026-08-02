@@ -48,6 +48,12 @@ class DecodeParams:
     # value for the whole study; sweeping it is future work. It is part of the
     # cache key so a change forces re-collection rather than mixing settings.
     thinking_effort: str | None = None
+    # Gateways disagree on whether reasoning is a top-level string or an
+    # OpenRouter-style object. It changes the request and therefore belongs in
+    # the cache key alongside the other decode parameters.
+    reasoning_format: str = "reasoning_effort"
+    include_sampling_params: bool = True
+    max_tokens_field: str = "max_tokens"
 
 
 @dataclass(frozen=True)

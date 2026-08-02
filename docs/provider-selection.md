@@ -1,6 +1,7 @@
 # Provider selection — step 2
 
-**Retrieved 2026-07-24. Everything below has a shelf life; re-verify before collection.**
+**Retrieved 2026-07-24; pilot behavior verified 2026-07-31. Everything below
+has a shelf life; re-verify before collection.**
 
 ## Recommendation: Baseten
 
@@ -67,17 +68,20 @@ so a provider change can't strand you:
 `token_profile()` reports `is_proxy: true` if it ever has to fall back, so the
 paper always states which quantity the frontier plot is actually on.
 
-## Quantization is disclosed, and it matters
+## Quantization is not disclosed, and that matters
 
-Baseten's response reports `"model": "inferact/inkling-nvfp4"`. You are being
-served **NVFP4**, not BF16. This is good news twice over: it is the only reason
-a 975B model is affordable per-token, and it is disclosed rather than guessed.
+Baseten's published documentation example reported
+`"model": "inferact/inkling-nvfp4"`, but the 20-call pilot did not. Every actual
+pilot response reported only `"model": "thinkingmachines/inkling"`. That string
+does not identify a quantization format, so the serving quantization is
+**unknown**. The documentation example is not evidence that the pilot used the
+same deployment.
 
-But it belongs in the paper, stated plainly. NVFP4 is a 4-bit floating point
-format; quantization can cost accuracy, and a reviewer comparing your Inkling
-numbers to Thinking Machines' published benchmarks will want to know why they
-differ. The harness now records `served_model` on every single record, so the
-claim is backed by the data rather than by this memo.
+Quantization can affect accuracy, and a reviewer comparing these Inkling
+numbers with Thinking Machines' published benchmarks will want this uncertainty
+made explicit. The harness records `served_model` on every response; unless the
+provider discloses more, record `quantization: unknown` and do not infer NVFP4
+or BF16.
 
 ## A code change this forced
 
@@ -119,7 +123,7 @@ boundary crisp.
 
 ## Sources
 
-- [Baseten — Inkling model library](https://www.baseten.co/library/inkling/) (payload shape, reasoning_tokens, NVFP4)
+- [Baseten — Inkling model library](https://www.baseten.co/library/inkling/) (documented payload shape and reasoning_tokens; its NVFP4 example did not match the pilot's served-model string)
 - [Fireworks — Inkling model page](https://fireworks.ai/models/fireworks/inkling) (serverless not supported)
 - [Fireworks — Reasoning docs](https://docs.fireworks.ai/guides/reasoning) (reasoning_content, reasoning_effort)
 - [Together — Inkling model page](https://www.together.ai/models/inkling) ("coming soon to Serverless")

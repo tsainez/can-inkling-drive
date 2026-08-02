@@ -109,6 +109,7 @@ def build_record(
     image_manifest: list | None = None,
     harness_version: str = "",
     git_sha: str = "",
+    cohort_id: str = "",
 ) -> dict:
     """One cache line. Raw response is stored whole and never trimmed."""
     rec = {
@@ -151,6 +152,7 @@ def build_record(
         "prompt_user": user,
         "harness_version": harness_version,
         "git_sha": git_sha,
+        "cohort_id": cohort_id,
     }
 
     if response is not None:
@@ -159,6 +161,7 @@ def build_record(
                 "response_text": response.text,
                 "reasoning_text": response.reasoning_text,
                 "served_model": response.served_model,
+                "served_provider": response.served_provider,
                 "response_raw": response.raw,
                 "usage": response.usage,
                 "latency_ms": response.latency_ms,
@@ -172,6 +175,7 @@ def build_record(
                 "response_text": None,
                 "reasoning_text": "",
                 "served_model": "",
+                "served_provider": "",
                 "response_raw": None,
                 "usage": {},
                 "latency_ms": None,

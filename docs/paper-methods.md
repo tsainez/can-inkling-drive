@@ -38,31 +38,43 @@ away.
 
 ## 3. Benchmark
 
-We evaluate on **DriveLM-nuScenes v1.1** (Sima et al., ECCV 2024), restricted
-to the subset of questions that are already formatted as multiple choice with a
-single-letter ground-truth answer.
+We evaluate on **DriveLM-nuScenes v1.1** (Sima et al., ECCV 2024). Its train
+split contains 377,956 question-answer pairs with public free-form answers and
+**no questions already formatted as multiple choice**. We deterministically
+convert a restricted subset into multiple-choice questions. This mirrors
+DriveLM's own `extract_data.py` and `convert_data.py` pipeline for producing the
+multiple-choice val/test format, but operates on train, where answers are
+public.
 
-**Why this subset.** Multiple choice with a known correct letter permits exact
-scoring. No LLM judge, no rubric, no BLEU or CIDEr against a reference answer.
-This removes the largest source of methodological noise in driving-VQA
-evaluation, at the cost of covering a narrower slice of the benchmark.
+**Conversion.** We discover question templates whose answers form a small,
+closed set. Every option is a verbatim human-written answer observed for that
+same normalized question template; the converter selects options and generates
+no text. We then sample equally from each answer class and counterbalance the
+gold answer across option positions within each class. These controls remove
+the answer-class prior and make option positions near-uniform in the full
+converted pool. The final evaluation sample must also be balanced jointly by
+template, gold class, and gold position before collection; a plain random slice
+does not preserve those guarantees.
 
-**Why human-annotated distractors.** Recent work (2026) finds that
-VLM-generated multiple-choice distractors in driving benchmarks carry
-linguistic regularities a model can exploit without consulting the image.
-DriveLM's options were written by human annotators and therefore do not carry a
-generator model's fingerprints. This matters directly for RQ3, where the entire
-question is how much accuracy survives without the image.
+**Why multiple choice.** A known correct option permits exact scoring: no LLM
+judge, rubric, BLEU, or CIDEr comparison is required. Recent work (2026) finds
+that VLM-generated distractors in driving benchmarks can carry linguistic
+regularities that are exploitable without an image. Our converter introduces
+no generator model: all answer options come from human annotations. This
+matters directly for RQ3, which measures how much accuracy survives without the
+image.
 
 **Split.** We use the **train** split. DriveLM's val split is released
 question-only; ground-truth answers are withheld to support the public
 leaderboard. Objective offline scoring is therefore only possible on train.
 
-**Subset composition.** The MCQ subset is not a uniform sample of DriveLM. We
-report its per-category distribution against the full QA distribution
-(Table [TBD]) and restrict claims accordingly. Chance accuracy is computed as
-the mean of 1/*k* over questions with *k* options rather than assumed to be
-0.25, because option counts vary.
+**Subset composition.** Filtering leaves 28,506 questions from exactly two
+binary templates: 15,294 planning questions asking whether the ego vehicle
+should consider a referenced object (Yes/No), and 13,212 perception questions
+asking the object's observed status (Moving/Stationary). Chance accuracy is
+therefore **0.50**. This is a real scope restriction: the study measures these
+two balanced binary tasks, not DriveLM or driving QA generally, and covers no
+prediction or behavior questions.
 
 **Not used.** AutoDrive-QA (arXiv 2503.15778) is cited for its distractor
 taxonomy, which informed our error-slice design, and its reported GPT-4V
@@ -73,8 +85,11 @@ alongside ours.
 
 ## 4. Models and serving configuration
 
-[TBD: five models — Inkling, three comparable open-weights models, one frontier
-closed reference.]
+Five models are preregistered: Inkling; Qwen3-VL-235B-A22B-Thinking;
+GLM-4.5V; Llama 4 Maverick; and GPT-5.6 Sol as a closed frontier reference.
+The primary comparison is Inkling versus Qwen3-VL-235B-A22B-Thinking. The full
+serving snapshot and rationale were locked on 2026-07-31 before scale
+collection (`docs/preregistration.md`).
 
 Open-weights models are served by a commercial inference provider rather than
 self-hosted; Inkling at 975B parameters requires over 2 TB of accelerator
@@ -82,14 +97,18 @@ memory at 16-bit precision, which is out of reach for an independent
 researcher.
 
 **Serving configuration is part of the result.** We report, for every model:
-the exact model string, the provider, the date of collection, and the
-quantization the provider reports serving. Inkling was served at **NVFP4**, as
-disclosed by the provider in the `model` field of every response
-(`inferact/inkling-nvfp4`). Quantization affects accuracy, and open-weights
-numbers are not comparable across providers without it. Where a provider does
-not disclose quantization we record it as unknown rather than assuming 16-bit.
+the requested model string, the response's served-model string, the provider,
+the date of collection, and any quantization the provider discloses. In the
+Inkling pilot, every response reported only `thinkingmachines/inkling`; the
+provider did **not** disclose quantization. We therefore record Inkling's
+quantization as **unknown**, rather than inferring NVFP4 from a documentation
+example or assuming 16-bit. Quantization affects accuracy, so open-weights
+numbers may not be comparable across provider deployments.
 
-**Decoding.** Temperature 0, top-p 1.0, fixed seed, max tokens [TBD].
+**Decoding.** Temperature 0, top-p 1.0, seed 0, and max 2,048 output tokens
+where those parameters are supported. Unsupported sampling parameters are
+omitted rather than emulated. Reasoning effort is medium where controllable;
+mandatory-reasoning models use their served thinking mode.
 Inkling exposes a controllable thinking-effort parameter; **all Inkling results
 are collected at a single documented setting ([TBD])**. Sweeping thinking
 effort to trace a within-model accuracy/token curve is the most promising
@@ -97,11 +116,13 @@ extension of this work and is left to future work. Consequently our
 cross-model efficiency comparison places each model at one operating point,
 not on its own frontier — a limitation we return to in §8.
 
-**Determinism.** We verified empirically whether identical requests at
-temperature 0 with a fixed seed return identical output [TBD result]. Batched
+**Determinism.** Four of five identical Inkling pilot requests were
+byte-identical; one differed. Batched
 mixture-of-experts inference is not guaranteed deterministic, and several
 providers ignore the seed parameter. Where output varies, we report it as
-run-to-run provider variance and do not describe it as seed variation.
+run-to-run provider variance and do not describe it as seed variation. We use
+one primary pass plus one repeat of a balanced 40-question subset rather than
+three nominal seed runs.
 
 ## 5. Conditions
 
@@ -138,8 +159,9 @@ hypothesis-only baselines in natural language inference (Gururangan et al.,
 2018), which revealed that annotation artifacts allowed models to classify
 sentence pairs without seeing the premise.
 
-**Corruption.** [TBD: one corruption] applied in memory at ImageNet-C severity
-[TBD] (Hendrycks & Dietterich, ICLR 2019). Source images are never modified.
+**Corruption.** Deterministic motion blur applied in memory at severity 3 on a
+1–5 ImageNet-C-style scale (Hendrycks & Dietterich, ICLR 2019), with corruption
+seed 0. Source images are never modified.
 Motion blur is implemented as a normalized line-kernel convolution in NumPy
 rather than via PIL, whose kernel filter is restricted to 3×3 and 5×5 and
 cannot express a realistic streak length.
@@ -208,15 +230,18 @@ pricing moves with promotions and with the hosting market. We therefore lead
 with tokens and treat dollars as a dated snapshot. Readers should not expect
 the cost figures to hold.
 
-**Sample size** was set from measured per-call cost on a 20-question pilot
-rather than from an estimate, and from the sample needed for a ±[TBD]
-percentage-point confidence interval, whichever bound was tighter.
+**Sample size.** The frozen cohort contains 600 questions: 300 per task, 150 per
+answer class, 300 per option position, and 75 in every task × class × position
+cell. The manifest and its source hash are published. Size was checked against
+measured per-call cost from the 20-question pilot rather than an estimate.
 
 ## 8. Limitations
 
-1. One benchmark. Conclusions are about DriveLM MCQ, not driving reasoning
-   generally.
-2. The MCQ subset is not a random sample of DriveLM [distribution: TBD].
+1. One benchmark and two converted binary templates. Conclusions are about
+   these balanced planning and perception tasks, not DriveLM or driving
+   reasoning generally.
+2. The converted subset is deliberately class-balanced and is not a random
+   sample of DriveLM.
 3. Train split only, because val ground truth is withheld. Models may have seen
    DriveLM train during pretraining. Our design cannot rule this out; the
    residual above-chance accuracy in `blind_notags` is consistent with either
@@ -226,7 +251,8 @@ percentage-point confidence interval, whichever bound was tighter.
 5. Open-weights models are evaluated as a specific provider serves them,
    including quantization. Numbers may not transfer to other deployments.
 6. Offline QA only. Nothing here speaks to closed-loop behaviour.
-7. Single-seed [or: n-seed, TBD] collection; see §4 on determinism.
+7. One primary generation seed with a 40-question repeated subset; see §4 on
+   provider nondeterminism.
 
 ## 9. Reproducibility
 

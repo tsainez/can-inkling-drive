@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "decided_on": "2026-07-31",
+  "primary_comparison": [
+    "inkling",
+    "qwen3-vl-235b-thinking"
+  ],
+  "routing_policy": {
+    "allow_fallbacks": false,
+    "require_supported_parameters": true,
+    "stop_on_endpoint_unavailability": true
+  },
+  "models": [
+    {
+      "label": "inkling",
+      "model_string": "thinkingmachines/inkling",
+      "weights_access": "public Apache-2.0 weights",
+      "gateway": "Baseten",
+      "upstream_provider": "Baseten",
+      "quantization": "unknown",
+      "usd_per_1m_input": 1.0,
+      "usd_per_1m_output": 4.05,
+      "price_quoted_on": "2026-07-31"
+    },
+    {
+      "label": "qwen3-vl-235b-thinking",
+      "model_string": "qwen/qwen3-vl-235b-a22b-thinking",
+      "weights_access": "public Apache-2.0 weights",
+      "gateway": "OpenRouter",
+      "upstream_provider": "Novita",
+      "provider_slug": "novita",
+      "quantization": "bf16",
+      "usd_per_1m_input": 0.98,
+      "usd_per_1m_output": 3.95,
+      "price_quoted_on": "2026-07-31"
+    },
+    {
+      "label": "glm-4.5v",
+      "model_string": "z-ai/glm-4.5v",
+      "weights_access": "public MIT-licensed weights",
+      "gateway": "OpenRouter",
+      "upstream_provider": "Novita",
+      "provider_slug": "novita",
+      "quantization": "fp8",
+      "usd_per_1m_input": 0.6,
+      "usd_per_1m_output": 1.8,
+      "price_quoted_on": "2026-07-31"
+    },
+    {
+      "label": "llama-4-maverick",
+      "model_string": "meta-llama/llama-4-maverick",
+      "weights_access": "public weights under the Llama 4 Community License",
+      "gateway": "OpenRouter",
+      "upstream_provider": "Novita",
+      "provider_slug": "novita",
+      "quantization": "fp8",
+      "usd_per_1m_input": 0.27,
+      "usd_per_1m_output": 0.85,
+      "price_quoted_on": "2026-07-31"
+    },
+    {
+      "label": "gpt-5.6-sol",
+      "model_string": "openai/gpt-5.6-sol",
+      "weights_access": "closed model via public commercial API",
+      "gateway": "OpenRouter",
+      "upstream_provider": "Azure",
+      "provider_slug": "azure",
+      "quantization": "unknown",
+      "usd_per_1m_input": 5.0,
+      "usd_per_1m_output": 30.0,
+      "price_quoted_on": "2026-07-31"
+    }
+  ],
+  "sources": [
+    "https://huggingface.co/Qwen/Qwen3-VL-235B-A22B-Thinking-FP8",
+    "https://huggingface.co/zai-org/GLM-4.5V",
+    "https://ai.meta.com/llama/get-started/",
+    "https://developers.openai.com/api/docs/models",
+    "https://openrouter.ai/api/v1/models/qwen/qwen3-vl-235b-a22b-thinking/endpoints",
+    "https://openrouter.ai/api/v1/models/z-ai/glm-4.5v/endpoints",
+    "https://openrouter.ai/api/v1/models/meta-llama/llama-4-maverick/endpoints",
+    "https://openrouter.ai/api/v1/models/openai/gpt-5.6-sol/endpoints"
+  ]
+}

@@ -17,7 +17,7 @@ from .adapters import DriveLMAdapter, FixtureAdapter, summarize
 from .analyze import summarize_run
 from .cache import ResponseCache
 from .config import MOCK_MODEL, DecodeParams, ModelSpec, RunConfig
-from .collect import collect
+from .collect import append_run_log, collect, git_is_dirty, git_sha
 from .providers import MockProvider, OpenAICompatProvider
 from .score import read_rows, score_records, write_rows
 
@@ -44,7 +44,37 @@ def _provider(args):
         return MockProvider(style=args.mock_style, seed=args.seed, fail_rate=args.mock_fail_rate)
     if not args.base_url:
         sys.exit("--base-url is required for a live provider")
-    return OpenAICompatProvider(base_url=args.base_url, api_key_env=args.api_key_env)
+    extra_body = {}
+    if getattr(args, "provider_only", ""):
+        route = {
+            "only": [args.provider_only],
+            "allow_fallbacks": bool(args.allow_provider_fallbacks),
+            "require_parameters": True,
+        }
+        if args.provider_quantization:
+            route["quantizations"] = [args.provider_quantization]
+        extra_body["provider"] = route
+    return OpenAICompatProvider(
+        base_url=args.base_url,
+        api_key_env=args.api_key_env,
+        extra_body=extra_body or None,
+        reasoning_format=args.reasoning_format,
+        include_sampling_params=not args.omit_sampling_params,
+        max_tokens_field=args.max_tokens_field,
+    )
+
+
+def _served_by(args) -> str:
+    if getattr(args, "served_by", ""):
+        return args.served_by
+    base_url = (getattr(args, "base_url", "") or "").lower()
+    if "baseten.co" in base_url:
+        return "baseten"
+    if "openrouter.ai" in base_url:
+        route = args.provider_only or "unlocked"
+        fallback = "fallbacks" if args.allow_provider_fallbacks else "pinned"
+        return f"openrouter:{route}:{fallback}"
+    return args.provider
 
 
 def _model(args) -> ModelSpec:
@@ -64,7 +94,7 @@ def _model(args) -> ModelSpec:
     return ModelSpec(
         label=args.model_label or args.model_string,
         model_string=args.model_string,
-        served_by=args.provider,
+        served_by=_served_by(args),
         base_url=args.base_url,
         api_key_env=args.api_key_env,
         quantization=args.quantization,
@@ -83,9 +113,68 @@ def cmd_inspect(args) -> None:
     print(json.dumps(report, indent=2))
 
 
-def cmd_collect(args) -> None:
+def _cohort_questions(args):
+    """Load exactly the frozen cohort, refusing any selection drift."""
+    from .cohort import read_manifest, select_questions
+
+    manifest = read_manifest(args.cohort)
+    if args.adapter != manifest["adapter"]:
+        sys.exit(
+            f"--adapter {args.adapter} does not match cohort adapter {manifest['adapter']}"
+        )
+    selection = manifest["selection"]
+    if args.convert_seed != selection["convert_seed"]:
+        sys.exit("--convert-seed does not match the frozen cohort")
+    if args.n_per_template not in (0, selection["n_per_template"]):
+        sys.exit("--n-per-template does not match the frozen cohort")
+
+    # Reconstruct only the selected balanced pool instead of loading all 28k.
+    args.n_per_template = selection["n_per_template"]
+    questions = _adapter(args).load()
+    return select_questions(questions, manifest, data_path=args.data), manifest
+
+
+def cmd_cohort(args) -> None:
+    from .cohort import build_manifest, write_manifest
+
+    if args.adapter != "drivelm_converted":
+        sys.exit("publication cohorts require --adapter drivelm_converted")
+    if args.n_per_template <= 0:
+        sys.exit("--n-per-template must be positive when freezing a cohort")
     adapter = _adapter(args)
     questions = adapter.load()
+    manifest = build_manifest(
+        questions,
+        data_path=args.data,
+        adapter=adapter.name,
+        convert_seed=args.convert_seed,
+        n_per_template=args.n_per_template,
+        created_on=args.created_on,
+        repeat_per_joint_cell=args.repeat_per_joint_cell,
+    )
+    write_manifest(manifest, args.out)
+    print(json.dumps({
+        "cohort_id": manifest["cohort_id"],
+        "out": args.out,
+        "audit": manifest["audit"],
+        "repeat_subset_n": manifest["repeat_subset"]["n_questions"],
+    }, indent=2))
+
+
+def cmd_collect(args) -> None:
+    if args.provider != "mock" and not args.dry_run and git_is_dirty():
+        sys.exit(
+            "live collection refused: commit the complete study state first so "
+            "git_sha identifies the code and cohort exactly"
+        )
+    manifest = None
+    if args.cohort:
+        if args.sample:
+            sys.exit("--sample cannot be combined with a frozen --cohort")
+        questions, manifest = _cohort_questions(args)
+    else:
+        adapter = _adapter(args)
+        questions = adapter.load()
     if args.sample:
         import random
         random.Random(args.sample_seed).shuffle(questions)
@@ -99,6 +188,9 @@ def cmd_collect(args) -> None:
             temperature=args.temperature,
             max_tokens=args.max_tokens,
             thinking_effort=args.thinking_effort,
+            reasoning_format=args.reasoning_format,
+            include_sampling_params=not args.omit_sampling_params,
+            max_tokens_field=args.max_tokens_field,
         ),
         corruption=args.corruption,
         corruption_severity=args.severity,
@@ -108,9 +200,32 @@ def cmd_collect(args) -> None:
     stats = collect(
         questions, cfg, _provider(args), cache,
         image_root=args.image_root, dry_run=args.dry_run, limit=args.limit,
+        cohort_id=(manifest or {}).get("cohort_id", ""),
+        max_usd=args.max_usd,
+        requests_per_minute=args.requests_per_minute,
     )
-    print(json.dumps({"config": cfg.key_fields(), "stats": stats.as_dict(),
-                      "cache_size": len(cache)}, indent=2, default=str))
+    receipt = {
+        "git_sha": git_sha(),
+        "git_dirty": git_is_dirty(),
+        "cohort_id": (manifest or {}).get("cohort_id", ""),
+        "cohort_path": args.cohort,
+        "model_label": cfg.model.label,
+        "config": cfg.key_fields(),
+        "pricing": {
+            "usd_per_1m_input": cfg.model.usd_per_1m_input,
+            "usd_per_1m_output": cfg.model.usd_per_1m_output,
+            "price_quoted_on": cfg.model.price_quoted_on,
+        },
+        "cache": args.cache,
+        "dry_run": args.dry_run,
+        "max_usd": args.max_usd,
+        "requests_per_minute": args.requests_per_minute,
+        "stats": stats.as_dict(),
+        "cache_size": len(cache),
+    }
+    if args.run_log:
+        append_run_log(args.run_log, receipt)
+    print(json.dumps(receipt, indent=2, default=str))
 
 
 def cmd_probe(args) -> None:
@@ -123,6 +238,12 @@ def cmd_probe(args) -> None:
 
 def cmd_pilot(args) -> None:
     from .pilot import run_pilot
+
+    if args.provider != "mock" and git_is_dirty():
+        sys.exit(
+            "live pilot refused: commit the complete study state first so git_sha "
+            "identifies the code exactly"
+        )
 
     adapter = _adapter(args)
     questions = adapter.load()
@@ -137,6 +258,9 @@ def cmd_pilot(args) -> None:
             temperature=args.temperature,
             max_tokens=args.max_tokens,
             thinking_effort=args.thinking_effort,
+            reasoning_format=args.reasoning_format,
+            include_sampling_params=not args.omit_sampling_params,
+            max_tokens_field=args.max_tokens_field,
         ),
         corruption=args.corruption,
         corruption_severity=args.severity,
@@ -150,12 +274,22 @@ def cmd_pilot(args) -> None:
 
 
 def cmd_score(args) -> None:
-    adapter = _adapter(args)
-    questions = adapter.load()
+    if args.cohort:
+        questions, manifest = _cohort_questions(args)
+    else:
+        adapter = _adapter(args)
+        questions = adapter.load()
+        manifest = None
     cache = ResponseCache(args.cache)
-    rows = score_records(cache.records(), questions)
+    allowed = {q.question_id for q in questions}
+    records = (r for r in cache.records() if r.get("question_id") in allowed)
+    rows = score_records(records, questions)
     write_rows(rows, args.out)
-    print(json.dumps({"scored_rows": len(rows), "out": args.out}, indent=2))
+    print(json.dumps({
+        "scored_rows": len(rows),
+        "cohort_id": (manifest or {}).get("cohort_id", ""),
+        "out": args.out,
+    }, indent=2))
 
 
 def _primary(args) -> tuple[str, str] | None:
@@ -217,10 +351,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("inspect"); common(sp); sp.set_defaults(func=cmd_inspect)
 
+    sp = sub.add_parser("cohort"); common(sp)
+    sp.add_argument("--created-on", default="2026-07-31")
+    sp.add_argument("--repeat-per-joint-cell", type=int, default=5)
+    sp.add_argument("--out", default="study/cohorts/drivelm-balanced-600.json")
+    sp.set_defaults(func=cmd_cohort)
+
     sp = sub.add_parser("collect"); common(sp)
     sp.add_argument("--provider", default="mock", choices=["mock", "openai_compat"])
     sp.add_argument("--base-url", default="")
     sp.add_argument("--api-key-env", default="IDQ_API_KEY")
+    sp.add_argument("--served-by", default="")
+    sp.add_argument("--provider-only", default="")
+    sp.add_argument("--provider-quantization", default="")
+    sp.add_argument("--allow-provider-fallbacks", action="store_true")
     sp.add_argument("--model-string", default="mock/uniform")
     sp.add_argument("--model-label", default="")
     sp.add_argument("--quantization", default="unknown")
@@ -232,17 +376,28 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--temperature", type=float, default=0.0)
     sp.add_argument("--max-tokens", type=int, default=2048)
     sp.add_argument("--thinking-effort", default=None)
+    sp.add_argument("--reasoning-format", default="reasoning_effort",
+                    choices=["reasoning_effort", "reasoning"])
+    sp.add_argument("--omit-sampling-params", action="store_true")
+    sp.add_argument("--max-tokens-field", default="max_tokens",
+                    choices=["max_tokens", "max_completion_tokens"])
     sp.add_argument("--cache", default="results/cache.jsonl")
     sp.add_argument("--image-root", default="")
     sp.add_argument("--sample", type=int, default=0)
     sp.add_argument("--sample-seed", type=int, default=7)
+    sp.add_argument("--cohort", default="")
     sp.add_argument("--limit", type=int, default=None)
+    sp.add_argument("--max-usd", type=float, default=None,
+                    help="stop after measured successful-response cost reaches this ceiling")
+    sp.add_argument("--requests-per-minute", type=float, default=0.0,
+                    help="pace call starts; 0 disables client-side pacing")
     sp.add_argument("--dry-run", action="store_true")
     sp.add_argument("--mock-style", default="uniform", choices=["uniform", "messy"])
     sp.add_argument("--mock-fail-rate", type=float, default=0.0)
     sp.add_argument("--usd-in", type=float, default=None)
     sp.add_argument("--usd-out", type=float, default=None)
     sp.add_argument("--price-date", default="")
+    sp.add_argument("--run-log", default="results/run-log.jsonl")
     sp.set_defaults(func=cmd_collect)
 
     sp = sub.add_parser("probe")
@@ -254,6 +409,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--provider", default="mock", choices=["mock", "openai_compat"])
     sp.add_argument("--base-url", default="")
     sp.add_argument("--api-key-env", default="BASETEN_API_KEY")
+    sp.add_argument("--served-by", default="")
+    sp.add_argument("--provider-only", default="")
+    sp.add_argument("--provider-quantization", default="")
+    sp.add_argument("--allow-provider-fallbacks", action="store_true")
     sp.add_argument("--model-string", default="mock/uniform")
     sp.add_argument("--model-label", default="")
     sp.add_argument("--quantization", default="unknown")
@@ -265,6 +424,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--temperature", type=float, default=0.0)
     sp.add_argument("--max-tokens", type=int, default=2048)
     sp.add_argument("--thinking-effort", default=None)
+    sp.add_argument("--reasoning-format", default="reasoning_effort",
+                    choices=["reasoning_effort", "reasoning"])
+    sp.add_argument("--omit-sampling-params", action="store_true")
+    sp.add_argument("--max-tokens-field", default="max_tokens",
+                    choices=["max_tokens", "max_completion_tokens"])
     sp.add_argument("--cache", default="results/pilot.jsonl")
     sp.add_argument("--image-root", default="")
     sp.add_argument("--sample-seed", type=int, default=7)
@@ -281,6 +445,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_pilot)
 
     sp = sub.add_parser("score"); common(sp)
+    sp.add_argument("--cohort", default="")
     sp.add_argument("--cache", default="results/cache.jsonl")
     sp.add_argument("--out", default="results/scored.jsonl")
     sp.set_defaults(func=cmd_score)

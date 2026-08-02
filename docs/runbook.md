@@ -23,26 +23,40 @@ Save to `data/drivelm/v1_1_train_nus.json` (gitignored — never commit benchmar
 data), then:
 
 ```bash
-python -m idq.cli inspect --adapter drivelm --data data/drivelm/v1_1_train_nus.json
+python -m idq.cli inspect --adapter drivelm_converted --data data/drivelm/v1_1_train_nus.json
 ```
 
-That prints the MCQ share, the per-category distribution of the MCQ subset
-versus all QA, and the expected chance accuracy. **Read those three numbers
-before doing anything else.** Specifically:
+The train file contains **377,956 free-form QA pairs and zero native
+multiple-choice questions**. The plain `drivelm` adapter therefore returns zero
+questions from this file; it is retained for inline-MCQ files such as val and
+must never be used on train.
 
-- If `mcq_share_of_all_qa` is far from your assumed ~26%, the sampling plan
-  changes.
-- If `mcq_by_category` is concentrated in one or two categories, your
-  conclusions are about that slice, and the paper says so.
-- If `expected_chance` isn't ~0.25, the MCQ subset has non-4-option questions
-  and every "above chance" claim needs the measured value.
-- `unresolvable_gold` counts questions whose answer the parser could not map to
-  a letter. A large number means the gold format varies and the adapter needs
-  another case, not that the questions are bad.
+The `drivelm_converted` adapter mirrors DriveLM's own conversion approach on
+the split whose answers are public. It selects only verbatim human-written
+answers from the same question template, balances gold classes, and
+counterbalances option positions. The inspection should report:
 
-Reference scale from the DriveLM docs: the training set is **29,448 QA pairs
-across 4,072 frames**. At ~26% MCQ that is roughly 7,600 usable questions —
-comfortably more than the 2,000 the full study needs.
+- `n_questions: 28506` and `questions_built: 28506`;
+- exactly two used templates: 15,294 planning Yes/No questions and 13,212
+  perception Moving/Stationary questions;
+- `expected_chance: 0.5`, because both tasks are binary;
+- exactly balanced gold classes, plus near-balanced full-pool gold positions
+  (`A: 14254`, `B: 14252`; the two-item difference comes from odd-sized class
+  buckets).
+
+If these values change, stop and explain the source-data or converter change
+before collecting. Claims are limited to these two balanced binary tasks—not
+DriveLM or driving QA generally, and not prediction or behavior.
+
+Reproduce and verify the publication cohort (this must return cohort ID
+`d0c80605189e33dc2b84884c3a5a30a7018f5669230dbdc1b6a4222082c71dc6`):
+
+```bash
+python -m idq.cli cohort \
+  --adapter drivelm_converted --data data/drivelm/v1_1_train_nus.json \
+  --convert-seed 20260731 --n-per-template 300 \
+  --out study/cohorts/drivelm-balanced-600.json
+```
 
 ## Step 3b: images, when you get to them
 
@@ -66,15 +80,14 @@ Both of these fail silently. Nothing errors; the numbers just turn out to be
 unreportable afterwards, and the only fix is to collect again and pay again.
 
 - [ ] **Commit the repository.** `git_sha` comes from `git rev-parse --short HEAD`
-      and goes into every cache record. An uncommitted tree writes an empty
-      string, and the methods section's claim that any number traces back to a
-      harness revision becomes false for the entire run.
+      and goes into every cache record. Live collection now refuses a dirty
+      tree because a commit SHA alone cannot reproduce uncommitted changes.
 - [ ] **Write the primary comparison down, here, before collecting.** It is
       exempt from Holm correction, which is only defensible if it was chosen in
       advance. Picking it after seeing the results is p-hacking with extra steps.
 
       ```
-      primary comparison: inkling vs <named baseline>   # decided YYYY-MM-DD, pre-collection
+      primary comparison: inkling vs qwen3-vl-235b-thinking   # decided 2026-07-31, pre-scale
       ```
 
 - [ ] **Decide the thinking-effort value and never change it.** It is in the
@@ -87,30 +100,31 @@ gone. That is why they are a checklist and not a validation step.
 ### Dry run first — renders prompts, makes zero calls, costs nothing:
 
 ```bash
-export BASETEN_API_KEY=...            # environment only, never in a file
+read -rs BASETEN_API_KEY && export BASETEN_API_KEY
 
 python -m idq.cli collect \
-  --adapter drivelm --data data/drivelm/v1_1_train_nus.json \
+  --adapter drivelm_converted --data data/drivelm/v1_1_train_nus.json \
   --provider openai_compat \
   --base-url https://inference.baseten.co/v1 \
   --api-key-env BASETEN_API_KEY \
   --model-string thinkingmachines/inkling \
-  --model-label inkling --quantization nvfp4 \
-  --condition blind_tags --sample 20 --dry-run
+  --model-label inkling --quantization unknown \
+  --condition blind_tags --sample 20 \
+  --thinking-effort medium --dry-run
 ```
 
 Then the real 20 calls:
 
 ```bash
 python -m idq.cli pilot \
-  --adapter drivelm --data data/drivelm/v1_1_train_nus.json \
+  --adapter drivelm_converted --data data/drivelm/v1_1_train_nus.json \
   --provider openai_compat \
   --base-url https://inference.baseten.co/v1 \
   --api-key-env BASETEN_API_KEY \
   --model-string thinkingmachines/inkling \
-  --model-label inkling --quantization nvfp4 \
-  --condition blind_tags \
-  --usd-in <from console> --usd-out <from console> --price-date 2026-07-24 \
+  --model-label inkling --quantization unknown \
+  --condition blind_tags --thinking-effort medium \
+  --usd-in 1.00 --usd-out 4.05 --price-date 2026-07-31 \
   --budget 15 --n 20 --n-repeat 5 \
   --cache results/pilot.jsonl
 ```
@@ -121,7 +135,7 @@ python -m idq.cli pilot \
 |---|---|
 | `payload_ok: false` | Stop. Model string, base URL or key. Nothing else matters yet. |
 | `reasoning_tokens_reported_frac` | Should be 1.0 on Baseten. If 0.0, RQ2 is on a proxy and the paper must say so. |
-| `served_models` | Expect `inferact/inkling-nvfp4`. More than one value means the provider swapped builds mid-run — results aren't comparable. |
+| `served_models` | The pilot reported `thinkingmachines/inkling`, which does not disclose quantization. More than one value means the provider swapped builds mid-run—results may not be comparable. |
 | `invalid_rate` | Above ~10%, raise `--max-tokens` before scaling. A reasoning model truncated mid-thought never reaches its answer line. |
 | `determinism.identical_frac` | **1.0 → run one seed.** Below 1.0 → the variation is provider nondeterminism, and the paper reports it as run-to-run variance, not seed variance. |
 | `sizing.binding_constraint` | `budget` means money limits you; `precision` means you already have enough calls for a ±4pp interval and more spending buys little. |
@@ -147,17 +161,35 @@ handful of calls and see whether the token counts move.
 
 Blind conditions first — they need no images and run on any connection:
 
+**Do not use a plain `--sample 600` for the final study.** With the default
+sample seed it produces 316 A versus 284 B answers and also unbalances the four
+gold classes; an always-A model would score 52.7%, not 50%. Before any scale
+collection, preregister and freeze one question set balanced jointly by
+template, gold class, and gold position, then reuse it for every model and
+condition. The task-weighting choice (equal templates or approximately
+pool-proportional templates) must be explicit. It is now locked to equal
+templates in `docs/preregistration.md`.
+
 ```bash
 for c in blind_tags blind_notags; do
-  python -m idq.cli collect ... --condition $c --sample <n from pilot> \
+  python -m idq.cli collect \
+    --adapter drivelm_converted --data data/drivelm/v1_1_train_nus.json \
+    --cohort study/cohorts/drivelm-balanced-600.json \
+    --provider openai_compat --base-url https://inference.baseten.co/v1 \
+    --api-key-env BASETEN_API_KEY \
+    --model-string thinkingmachines/inkling --model-label inkling \
+    --quantization unknown --thinking-effort medium --condition $c \
+    --usd-in 1.00 --usd-out 4.05 --price-date 2026-07-31 \
+    --requests-per-minute 15 --max-usd 0.195 \
     --cache results/cache.jsonl
 done
 
-python -m idq.cli score --adapter drivelm --data data/... \
+python -m idq.cli score --adapter drivelm_converted --data data/... \
+  --cohort study/cohorts/drivelm-balanced-600.json \
   --cache results/cache.jsonl --out results/scored.jsonl
 
 python -m idq.cli analyze --scored results/scored.jsonl \
-  --primary "inkling,<named baseline>" \
+  --primary "inkling,qwen3-vl-235b-thinking" \
   --markdown results/tables.md --json-out results/report.json
 ```
 

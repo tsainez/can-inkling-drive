@@ -129,7 +129,7 @@ def test_reasoning_content_is_not_folded_into_the_answer(provider, monkeypatch):
 
 
 def test_served_model_is_captured_for_quantization_disclosure(provider, monkeypatch):
-    """'inferact/inkling-nvfp4' tells us the weights were served at NVFP4."""
+    """The published example disclosed NVFP4; actual pilot strings did not."""
     p, _ = call(provider, monkeypatch, BASETEN_RESPONSE)
     resp = p.complete(system="s", user="u", model_string="thinkingmachines/inkling")
     assert resp.served_model == "inferact/inkling-nvfp4"
@@ -150,6 +150,53 @@ def test_thinking_effort_is_sent_as_reasoning_effort(provider, monkeypatch):
     p.complete(system="s", user="u", model_string="m", thinking_effort="low")
     assert captured["json"]["reasoning_effort"] == "low"
     assert captured["url"].endswith("/chat/completions")
+
+
+def test_openrouter_reasoning_and_route_are_explicit(monkeypatch):
+    monkeypatch.setenv("IDQ_TEST_KEY", "not-a-real-key")
+    payload = json.loads(json.dumps(BASETEN_RESPONSE))
+    payload["provider"] = "Novita"
+    payload["choices"][0]["message"]["reasoning"] = "private reasoning field"
+    payload["choices"][0]["message"].pop("reasoning_content")
+    p = OpenAICompatProvider(
+        base_url="https://openrouter.ai/api/v1",
+        api_key_env="IDQ_TEST_KEY",
+        reasoning_format="reasoning",
+        extra_body={
+            "provider": {
+                "only": ["novita"],
+                "quantizations": ["bf16"],
+                "allow_fallbacks": False,
+                "require_parameters": True,
+            }
+        },
+    )
+    p, captured = call(p, monkeypatch, payload)
+    resp = p.complete(system="s", user="u", model_string="m", thinking_effort="medium")
+    assert captured["json"]["reasoning"] == {"effort": "medium", "exclude": False}
+    assert captured["json"]["provider"]["only"] == ["novita"]
+    assert captured["json"]["provider"]["allow_fallbacks"] is False
+    assert resp.reasoning_text == "private reasoning field"
+    assert resp.served_provider == "Novita"
+
+
+def test_reasoning_endpoint_can_omit_sampling_and_rename_token_limit(
+    monkeypatch,
+):
+    monkeypatch.setenv("IDQ_TEST_KEY", "not-a-real-key")
+    p = OpenAICompatProvider(
+        base_url="https://openrouter.ai/api/v1",
+        api_key_env="IDQ_TEST_KEY",
+        reasoning_format="reasoning",
+        include_sampling_params=False,
+        max_tokens_field="max_completion_tokens",
+    )
+    p, captured = call(p, monkeypatch, BASETEN_RESPONSE)
+    p.complete(system="s", user="u", model_string="m", max_tokens=512)
+    assert captured["json"]["max_completion_tokens"] == 512
+    assert "max_tokens" not in captured["json"]
+    assert "temperature" not in captured["json"]
+    assert "top_p" not in captured["json"]
 
 
 def test_images_become_content_parts(provider, monkeypatch):

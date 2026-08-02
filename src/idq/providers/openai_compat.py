@@ -29,6 +29,9 @@ class OpenAICompatProvider:
     backoff_base_s: float = 1.5
     backoff_cap_s: float = 60.0
     extra_body: dict | None = None
+    reasoning_format: str = "reasoning_effort"
+    include_sampling_params: bool = True
+    max_tokens_field: str = "max_tokens"
 
     def _key(self) -> str:
         key = os.environ.get(self.api_key_env)
@@ -66,16 +69,22 @@ class OpenAICompatProvider:
                 {"role": "system", "content": system},
                 {"role": "user", "content": content},
             ],
-            "temperature": temperature,
-            "top_p": top_p,
-            "max_tokens": max_tokens,
             "seed": seed,
         }
+        payload[self.max_tokens_field] = max_tokens
+        if self.include_sampling_params:
+            payload["temperature"] = temperature
+            payload["top_p"] = top_p
         if thinking_effort:
-            # Field name varies by provider. Confirm against provider docs on
-            # the 20-call pilot before trusting it; an ignored field looks
-            # identical to a respected one in the response.
-            payload["reasoning_effort"] = thinking_effort
+            if self.reasoning_format == "reasoning":
+                payload["reasoning"] = {"effort": thinking_effort, "exclude": False}
+            elif self.reasoning_format == "reasoning_effort":
+                payload["reasoning_effort"] = thinking_effort
+            else:
+                raise TerminalError(
+                    f"unknown reasoning format {self.reasoning_format!r}",
+                    reason="malformed_request",
+                )
         if self.extra_body:
             payload.update(self.extra_body)
 
@@ -133,7 +142,9 @@ class OpenAICompatProvider:
             # Keep them separate: folding reasoning into text would feed the
             # model's own deliberation to the answer parser, where a letter
             # mentioned mid-thought could be mistaken for the final answer.
-            reasoning_text = message.get("reasoning_content") or ""
+            reasoning_text = (
+                message.get("reasoning_content") or message.get("reasoning") or ""
+            )
             if not text and reasoning_text:
                 text = reasoning_text
 
@@ -146,6 +157,7 @@ class OpenAICompatProvider:
                 attempts=attempt,
                 reasoning_text=reasoning_text,
                 served_model=str(data.get("model") or ""),
+                served_provider=str(data.get("provider") or ""),
             )
 
         raise last_exc or RetryableError("exhausted retries")

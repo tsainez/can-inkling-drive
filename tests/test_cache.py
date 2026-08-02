@@ -7,7 +7,7 @@ import os
 from idq.adapters import FixtureAdapter
 from idq.cache import ResponseCache
 from idq.config import MOCK_MODEL, DecodeParams, RunConfig
-from idq.collect import collect
+from idq.collect import append_run_log, collect, git_is_dirty
 from idq.providers import MockProvider
 
 
@@ -146,6 +146,82 @@ def test_full_raw_response_and_prompt_are_stored(tmp_path):
         assert field in rec, f"missing {field}"
     assert rec["response_raw"]["choices"][0]["message"]["content"]
     assert rec["usage"]["reasoning_tokens"] is not None
+
+
+def test_cohort_id_is_carried_into_every_record(tmp_path):
+    qs = FixtureAdapter(n=2).load()
+    cache_path = str(tmp_path / "cache.jsonl")
+    collect(
+        qs, cfg(), MockProvider(seed=1), ResponseCache(cache_path),
+        cohort_id="cohort-123", verbose=False,
+    )
+    assert {r["cohort_id"] for r in ResponseCache(cache_path).records()} == {
+        "cohort-123"
+    }
+
+
+def test_run_log_is_append_only_and_contains_no_credential(tmp_path, monkeypatch):
+    monkeypatch.setenv("IDQ_API_KEY", "sk-never-log-this")
+    path = str(tmp_path / "run-log.jsonl")
+    append_run_log(path, {"cohort_id": "c1", "stats": {"successes": 2}})
+    append_run_log(path, {"cohort_id": "c1", "stats": {"successes": 3}})
+    text = open(path, encoding="utf-8").read()
+    assert len(text.splitlines()) == 2
+    assert "sk-never-log-this" not in text
+
+
+def test_dirty_tree_detection_fails_closed(monkeypatch):
+    def broken(*args, **kwargs):
+        raise OSError("git unavailable")
+
+    monkeypatch.setattr("idq.collect.subprocess.run", broken)
+    assert git_is_dirty() is True
+
+
+def test_collection_stops_at_measured_budget(tmp_path):
+    from idq.config import ModelSpec
+
+    priced = ModelSpec(
+        label="priced", model_string="mock/priced", served_by="mock",
+        usd_per_1m_input=1000.0, usd_per_1m_output=1000.0,
+    )
+    qs = FixtureAdapter(n=20).load()
+    stats = collect(
+        qs,
+        cfg(model=priced),
+        MockProvider(seed=1),
+        ResponseCache(str(tmp_path / "budget.jsonl")),
+        max_usd=0.05,
+        verbose=False,
+    )
+    assert stats.budget_exhausted is True
+    assert stats.calls_made < 20
+    # The ceiling is checked between calls, so overshoot is bounded to one call.
+    assert stats.measured_usd >= 0.05
+
+
+def test_request_pacing_waits_between_call_starts(tmp_path, monkeypatch):
+    clock = {"now": 0.0}
+    sleeps = []
+
+    def monotonic():
+        return clock["now"]
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+        clock["now"] += seconds
+
+    monkeypatch.setattr("idq.collect.time.monotonic", monotonic)
+    monkeypatch.setattr("idq.collect.time.sleep", sleep)
+    collect(
+        FixtureAdapter(n=3).load(),
+        cfg(),
+        MockProvider(seed=1),
+        ResponseCache(str(tmp_path / "paced.jsonl")),
+        requests_per_minute=60,
+        verbose=False,
+    )
+    assert sleeps == [1.0, 1.0]
 
 
 def test_no_api_key_is_ever_written(tmp_path, monkeypatch):

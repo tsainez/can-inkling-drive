@@ -6,8 +6,11 @@ re-collection.
 
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 
 from . import __version__
@@ -27,6 +30,8 @@ class CollectionStats:
     successes: int = 0
     terminal_errors: int = 0
     retryable_failures: int = 0
+    measured_usd: float = 0.0
+    budget_exhausted: bool = False
 
     def as_dict(self) -> dict:
         return dict(self.__dict__)
@@ -38,6 +43,20 @@ def git_sha(default: str = "") -> str:
             ["git", "rev-parse", "--short", "HEAD"],
             stderr=subprocess.DEVNULL, text=True,
         ).strip()
+    except Exception:
+        return default
+
+
+def git_is_dirty(default: bool = True) -> bool:
+    """Uncommitted code cannot be reconstructed from a recorded commit SHA."""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return bool(result.stdout.strip())
     except Exception:
         return default
 
@@ -61,10 +80,22 @@ def collect(
     limit: int | None = None,
     progress_every: int = 25,
     verbose: bool = True,
+    cohort_id: str = "",
+    max_usd: float | None = None,
+    requests_per_minute: float = 0.0,
 ) -> CollectionStats:
     stats = CollectionStats()
+    if max_usd is not None:
+        if max_usd <= 0:
+            raise ValueError("max_usd must be positive")
+        if cfg.model.usd_per_1m_input is None or cfg.model.usd_per_1m_output is None:
+            raise ValueError("max_usd requires input and output prices")
+    if requests_per_minute < 0:
+        raise ValueError("requests_per_minute cannot be negative")
     sha = git_sha()
     needs_images = cfg.condition in IMAGE_CONDITIONS
+    min_interval = 60.0 / requests_per_minute if requests_per_minute else 0.0
+    last_call_started: float | None = None
 
     todo = questions[:limit] if limit else questions
 
@@ -105,6 +136,16 @@ def collect(
                 print("--- end ---")
             continue
 
+        if max_usd is not None and stats.measured_usd >= max_usd:
+            stats.budget_exhausted = True
+            if verbose:
+                print(
+                    f"  stop: measured spend ${stats.measured_usd:.6f} reached "
+                    f"the ${max_usd:.6f} ceiling",
+                    file=sys.stderr,
+                )
+            break
+
         images = None
         if refs:
             images = load_and_encode(
@@ -114,6 +155,11 @@ def collect(
                 seed=cfg.seed,
             )
 
+        if min_interval and last_call_started is not None:
+            remaining = min_interval - (time.monotonic() - last_call_started)
+            if remaining > 0:
+                time.sleep(remaining)
+        last_call_started = time.monotonic()
         stats.calls_made += 1
         try:
             resp = provider.complete(
@@ -137,7 +183,7 @@ def collect(
                     prompt_hash=prompt_hash, system=system, user=user,
                     error_reason=exc.reason, error_message=str(exc),
                     image_manifest=manifest_to_json(refs),
-                    harness_version=__version__, git_sha=sha,
+                    harness_version=__version__, git_sha=sha, cohort_id=cohort_id,
                 )
             )
             continue
@@ -149,12 +195,23 @@ def collect(
             continue
 
         stats.successes += 1
+        usage = resp.usage or {}
+        if cfg.model.usd_per_1m_input is not None:
+            stats.measured_usd += (
+                float(usage.get("prompt_tokens") or 0)
+                * cfg.model.usd_per_1m_input / 1_000_000
+            )
+        if cfg.model.usd_per_1m_output is not None:
+            stats.measured_usd += (
+                float(usage.get("completion_tokens") or 0)
+                * cfg.model.usd_per_1m_output / 1_000_000
+            )
         cache.append(
             build_record(
                 cache_key=key, status="success", question=q, cfg=cfg,
                 prompt_hash=prompt_hash, system=system, user=user, response=resp,
                 image_manifest=manifest_to_json(refs),
-                harness_version=__version__, git_sha=sha,
+                harness_version=__version__, git_sha=sha, cohort_id=cohort_id,
             )
         )
 
@@ -166,4 +223,20 @@ def collect(
                 file=sys.stderr,
             )
 
+    stats.measured_usd = round(stats.measured_usd, 8)
     return stats
+
+
+def append_run_log(path: str, record: dict) -> None:
+    """Append one credential-free collection receipt and make it durable."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    payload = {
+        "schema": 1,
+        "ts": time.time(),
+        "ts_iso": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        **record,
+    }
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())

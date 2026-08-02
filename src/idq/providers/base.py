@@ -48,6 +48,9 @@ class ProviderResponse:
     # What the provider says it actually served, e.g. "inferact/inkling-nvfp4".
     # This is where quantization gets disclosed, and it belongs in the paper.
     served_model: str = ""
+    # A gateway may route one model slug to several upstream providers. Capture
+    # the actual provider returned by the gateway rather than trusting intent.
+    served_provider: str = ""
 
 
 class Provider(Protocol):

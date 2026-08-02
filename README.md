@@ -11,30 +11,29 @@ support for putting a language model in a control loop.
 
 ## Status
 
-- **Step 1 — done.** Harness built, 146 tests passing offline with no API key.
+- **Step 1 — done.** Harness built and tested offline with no API key.
 - **Step 2 — done.** Provider selected: Baseten. `reasoning_tokens` confirmed
   available, so RQ2 does not need a proxy metric. See
   [docs/provider-selection.md](docs/provider-selection.md).
-- **Step 3 — ready to run.** DriveLM v1.1 **train** split (val ships without
-  gold answers). See [docs/runbook.md](docs/runbook.md).
+- **Step 3 — done.** DriveLM v1.1 train is converted into two balanced binary
+  tasks; the publication cohort is frozen and hashed.
 - **Analysis — done.** All four research questions are computed and rendered as
   paper-ready tables: pairwise McNemar with Holm correction and one exempt
   preregistered comparison (RQ1), the accuracy-versus-thinking-tokens Pareto
   frontier (RQ2), the three-way grounding decomposition (RQ3), and paired
   corruption robustness plus a ranking-stability audit (RQ4).
-- **Steps 4–5** — pilot and scale-up, not started. These are the first steps
-  that need an API key and cost money.
+- **Step 4 — done.** The 20-call Inkling pilot passed.
+- **Step 5 — prepared, not collected.** Cohort, model slate, primary comparison,
+  and provenance logging are locked; paid scale collection has not started.
 
 ```bash
 pip install -e ".[dev]"
-pytest                      # 146 tests, no network, no key
+pytest                      # 177 tests, no network, no key
 ```
 
-**Before the first paid call:** commit the repository. `git_sha` goes into every
-cache record, and an uncommitted tree writes an empty one, which silently voids
-the reproducibility claim in the methods section. And write the primary
-comparison into the runbook *before* collecting — it is exempt from multiplicity
-correction, which is only defensible if it was chosen in advance.
+**Before a paid call:** commit the repository. Live collection refuses a dirty
+tree because `git_sha` cannot identify uncommitted code. The primary comparison
+was locked on 2026-07-31 in [docs/preregistration.md](docs/preregistration.md).
 
 ## Research questions
 
@@ -47,12 +46,12 @@ correction, which is only defensible if it was chosen in advance.
 
 ## Design decisions
 
-**DriveLM is the primary benchmark.** Roughly a quarter of DriveLM questions are
-already multiple choice with a single-letter gold answer, which gives objective
-scoring with no LLM judge and no rubric. Distractors are human-annotated, so
-they do not carry the linguistic fingerprints that VLM-generated distractors
-leave behind. AutoDrive-QA is cited for its distractor taxonomy and as a
-reference point only; nothing here is built on it.
+**DriveLM is the primary benchmark.** Train contains 377,956 free-form QA pairs
+and zero native multiple-choice questions. The deterministic converter selects
+verbatim human-written answers from two closed binary templates, balances
+answer classes, and counterbalances option positions. The frozen study cohort
+contains 300 planning and 300 perception questions with exact joint balance;
+chance is 0.50. Claims do not extend to DriveLM or driving QA generally.
 
 **Three conditions per model, plus a fourth for grounding.** `clean`,
 `blind_tags`, `blind_notags`, `corrupt`.
@@ -106,8 +105,13 @@ future work. This is stated as a limitation rather than left implicit.
 ## Usage
 
 ```bash
-# Inspect a benchmark: MCQ share, category distribution, chance accuracy
-python -m idq.cli inspect --adapter drivelm --data data/drivelm/train.json
+# Convert and inspect the free-form DriveLM train split
+python -m idq.cli inspect --adapter drivelm_converted --data data/drivelm/train.json
+
+# Reproduce the exact publication cohort and verify its source hash
+python -m idq.cli cohort --adapter drivelm_converted \
+  --data data/drivelm/train.json --n-per-template 300 \
+  --out study/cohorts/drivelm-balanced-600.json
 
 # Free end-to-end verification with the mock provider
 python -m idq.cli collect --provider mock --condition blind_tags --n-fixture 400
@@ -122,7 +126,7 @@ python -m idq.cli analyze --scored results/scored.jsonl \
   --markdown results/tables.md --json-out results/report.json
 
 # Dry run against a real provider: renders prompts, makes no calls
-python -m idq.cli collect --adapter drivelm --data data/drivelm/train.json \
+python -m idq.cli collect --adapter drivelm_converted --data data/drivelm/train.json \
   --provider openai_compat --base-url https://api.example.com/v1 \
   --api-key-env IDQ_API_KEY --model-string <exact-model-string> \
   --condition blind_tags --sample 20 --dry-run

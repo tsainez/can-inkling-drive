@@ -67,8 +67,12 @@ def _row(rec, gold, *, predicted, method, correct, valid, candidates=None) -> di
         "thinking_effort": decode.get("thinking_effort"),
         "max_tokens": decode.get("max_tokens"),
         "temperature": decode.get("temperature"),
+        "reasoning_format": decode.get("reasoning_format", "reasoning_effort"),
+        "include_sampling_params": decode.get("include_sampling_params", True),
+        "max_tokens_field": decode.get("max_tokens_field", "max_tokens"),
         "harness_version": rec.get("harness_version", ""),
         "git_sha": rec.get("git_sha", ""),
+        "cohort_id": rec.get("cohort_id", ""),
         "usd_per_1m_input": rec.get("usd_per_1m_input"),
         "usd_per_1m_output": rec.get("usd_per_1m_output"),
         "price_quoted_on": rec.get("price_quoted_on", ""),
@@ -95,6 +99,7 @@ def _row(rec, gold, *, predicted, method, correct, valid, candidates=None) -> di
         # Quantization affects accuracy and providers do not always volunteer
         # it, so whatever they do return is preserved verbatim.
         "served_model": rec.get("served_model", ""),
+        "served_provider": rec.get("served_provider", ""),
         # Two independent fallbacks for RQ2 if reasoning_tokens goes missing:
         # the sibling reasoning_content field, and any inline <think> block.
         "reasoning_chars": len(rec.get("reasoning_text") or ""),
