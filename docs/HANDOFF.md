@@ -285,12 +285,18 @@ was unchanged. This rehearsal used local uncommitted image-pipeline changes and
 made zero provider calls, so it is readiness evidence rather than a collection
 receipt.
 
-The tree is currently dirty from image-pipeline, camera-selection, test,
-documentation, and Makefile changes; live collection must remain blocked until
-the owner reviews and commits them. After a clean commit, run at most one
-clean-image smoke call with a hard $0.002 ceiling to measure actual image
-billing and payload acceptance. Do not run the Makefile's 20-call or 600-call
-image targets before that measurement.
+The owner committed the image-pipeline and camera-selection changes as
+`3f532d6`. A single clean-image smoke then succeeded from that clean commit:
+1,614 prompt tokens, 79 completion tokens, 69 reported reasoning tokens,
+2,087.7 ms latency, valid answer-tag extraction, and **$0.00193395** measured
+cost. The answer was incorrect and must not be interpreted at n=1. The receipt
+is `study/runs/2026-08-03-inkling-clean-smoke.json`.
+
+The two blind conditions plus this smoke cost **$0.389784** in total. If the
+smoke's usage were representative, 600 Inkling clean calls would cost about
+$1.16, but this is only a planning estimate. No scale image budget is approved.
+Do not run the Makefile's 20-call or 600-call paid targets until the owner sets
+a new explicit ceiling and the collector command includes it.
 
 Every record carries the cohort ID, and every invocation appends a
 credential-free receipt to `results/run-log.jsonl`.

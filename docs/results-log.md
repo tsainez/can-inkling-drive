@@ -127,3 +127,45 @@ changes, so its hashes are diagnostic rather than a formal study receipt. A
 paid image smoke must wait for a reviewed clean commit. Actual image-token cost
 is still unknown; estimate it with one call under a $0.002 ceiling before any
 larger clean or corrupt condition.
+
+## 2026-08-03 — Inkling clean-image smoke
+
+One paid call was made solely to validate Baseten's native-resolution image
+payload and measure billing. Collection ran from clean commit `3f532d6` after
+all 188 offline tests passed.
+
+| field | value |
+|---|---:|
+| calls / successes | 1 / 1 |
+| camera | `CAM_FRONT` |
+| source resolution | 1600x900 |
+| prompt tokens | 1,614 |
+| completion tokens | 79 |
+| reasoning tokens | 69, provider-reported |
+| latency | 2,087.7 ms |
+| measured cost | **$0.00193395** |
+| answer validity | valid, `answer_tag` |
+
+The served-model string was `thinkingmachines/inkling`, the cohort ID matched,
+and there were no terminal or retryable failures. The answer was incorrect, but
+correctness at n=1 is deliberately not interpreted. This call establishes only
+that the image payload works and that a representative clean call cost about
+$0.00193.
+
+A straight 600-call extrapolation is approximately $1.16037 for Inkling clean,
+assuming similar usage. This is a planning estimate, not a budget authorization
+or an accuracy result; output length and image billing can vary. Cumulative
+measured spend for the two blind conditions plus this smoke is **$0.389784**.
+
+Artifacts:
+
+| artifact | SHA-256 |
+|---|---|
+| `results/inkling-clean-smoke.jsonl` | `4e9874a2231f922f3453f3207607bf670d9ee21b7c979d467929cebb8e98187d` |
+| `results/inkling-clean-smoke-scored.jsonl` | `85cbda2e645943d11e39373fa6099ae5aa5f91bcd8e8ed820251f6db3744af30` |
+| `results/run-log.jsonl` after the smoke | `f8de9da0bd196c9ef8468ce8da738c80a1e86e758c97d61b920ae454502633eb` |
+
+The machine-readable receipt is
+`study/runs/2026-08-03-inkling-clean-smoke.json`. The earlier run-log hash in
+the blind-condition receipt identifies its historical append-only prefix; it
+is not expected to equal the hash after this later receipt was appended.

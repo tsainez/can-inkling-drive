@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "study_date_local": "2026-08-03",
+  "purpose": "Single-call clean-image payload and billing validation; not an accuracy estimate.",
+  "ip_boundary": "Public DriveLM data and public model only; no client or employer data, imagery, logs, telemetry, hardware, or compute.",
+  "git_sha": "3f532d6",
+  "git_dirty_during_collection": false,
+  "cohort_id": "d0c80605189e33dc2b84884c3a5a30a7018f5669230dbdc1b6a4222082c71dc6",
+  "adapter": "drivelm_converted",
+  "model_string": "thinkingmachines/inkling",
+  "served_model": "thinkingmachines/inkling",
+  "served_by": "baseten",
+  "quantization": "unknown",
+  "condition": "clean",
+  "question_id": "009e80a341ea5fd9",
+  "decode": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "seed": 0,
+    "max_tokens": 256,
+    "thinking_effort": "medium"
+  },
+  "image": {
+    "camera": "CAM_FRONT",
+    "width": 1600,
+    "height": 900,
+    "source_sha256": "8ceaddbf31a27c09020e6c384cefec5ef640fe3ccdbea1dc4c29c3e134125148"
+  },
+  "pricing": {
+    "usd_per_1m_input": 1.0,
+    "usd_per_1m_output": 4.05,
+    "price_quoted_on": "2026-08-03"
+  },
+  "outcome": {
+    "calls_made": 1,
+    "successes": 1,
+    "terminal_errors": 0,
+    "retryable_failures": 0,
+    "valid_answer": true,
+    "extraction_method": "answer_tag",
+    "correct": false,
+    "prompt_tokens": 1614,
+    "completion_tokens": 79,
+    "reasoning_tokens": 69,
+    "reasoning_tokens_reported": true,
+    "latency_ms": 2087.7223330026027,
+    "measured_usd": 0.00193395
+  },
+  "planning_estimate": {
+    "clean_600_usd_if_usage_matches_smoke": 1.16037,
+    "warning": "One call validates payload and billing only. It does not estimate accuracy and may not represent the full usage distribution."
+  },
+  "cumulative_measured_project_spend_usd": 0.389784,
+  "artifact_sha256": {
+    "results/inkling-clean-smoke.jsonl": "4e9874a2231f922f3453f3207607bf670d9ee21b7c979d467929cebb8e98187d",
+    "results/inkling-clean-smoke-scored.jsonl": "85cbda2e645943d11e39373fa6099ae5aa5f91bcd8e8ed820251f6db3744af30",
+    "results/run-log.jsonl": "f8de9da0bd196c9ef8468ce8da738c80a1e86e758c97d61b920ae454502633eb"
+  }
+}
