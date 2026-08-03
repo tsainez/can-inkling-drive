@@ -21,6 +21,15 @@ from .images import build_manifest, load_and_encode, manifest_hash, manifest_to_
 from .prompts import IMAGE_CONDITIONS, format_options_block, get_prompt
 from .providers.base import RetryableError, TerminalError
 
+# Terminal-error reasons that describe the *setup*, not the request. These are
+# identical for every question, so caching them per question would be both
+# useless and actively harmful — terminal records are never retried.
+CONFIG_ERROR_REASONS = frozenset({"missing_credential", "auth", "unknown_model"})
+
+
+class ConfigurationError(RuntimeError):
+    """Raised when collection cannot proceed for reasons unrelated to any question."""
+
 
 @dataclass
 class CollectionStats:
@@ -174,7 +183,22 @@ def collect(
                 thinking_effort=cfg.decode.thinking_effort,
             )
         except TerminalError as exc:
-            # Cached as terminal. Retrying a malformed request or a refusal on
+            # Configuration errors are not per-question outcomes. A missing or
+            # rejected credential says nothing about this question and will
+            # affect every remaining one identically, so caching it would
+            # poison the cache: terminal records are never retried, and the
+            # run could never be repaired without deleting the file by hand.
+            # Abort loudly instead, before burning through the whole sample.
+            if exc.reason in CONFIG_ERROR_REASONS:
+                raise ConfigurationError(
+                    f"aborting after {stats.considered} question(s): {exc}. "
+                    "This is a local configuration problem, not a per-question "
+                    "failure, so nothing was cached and no money was spent. "
+                    "Fix it and rerun."
+                ) from exc
+
+            # Everything else is genuinely about this request. Cached as
+            # terminal, because retrying a malformed request or a refusal on
             # every resume burns budget on a call that can never succeed.
             stats.terminal_errors += 1
             cache.append(

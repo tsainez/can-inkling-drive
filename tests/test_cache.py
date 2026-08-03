@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 from idq.adapters import FixtureAdapter
 from idq.cache import ResponseCache
 from idq.config import MOCK_MODEL, DecodeParams, RunConfig
@@ -239,3 +241,41 @@ def test_dry_run_makes_no_calls(tmp_path):
     s = collect(qs, cfg(), p, ResponseCache(cache_path), dry_run=True, verbose=False)
     assert p.calls == 0 and s.calls_made == 0
     assert not os.path.exists(cache_path) or len(ResponseCache(cache_path)) == 0
+
+
+def test_a_missing_credential_aborts_instead_of_poisoning_the_cache(tmp_path, monkeypatch):
+    """Regression: an empty API key once marked all 20 pilot questions terminal.
+
+    Terminal records are never retried, so the cache had to be deleted by hand
+    before the run could be repaired. A configuration error is identical for
+    every question and says nothing about any of them: abort, cache nothing.
+    """
+    from idq.collect import ConfigurationError
+    from idq.providers import OpenAICompatProvider
+
+    monkeypatch.delenv("IDQ_ABSENT_KEY", raising=False)
+    qs = FixtureAdapter(n=20).load()
+    cache_path = str(tmp_path / "cache.jsonl")
+    provider = OpenAICompatProvider(
+        base_url="https://example.invalid/v1", api_key_env="IDQ_ABSENT_KEY"
+    )
+
+    with pytest.raises(ConfigurationError) as exc:
+        collect(qs, cfg(), provider, ResponseCache(cache_path), verbose=False)
+
+    assert "no money was spent" in str(exc.value)
+    assert len(ResponseCache(cache_path)) == 0, "configuration error must not be cached"
+
+
+def test_a_per_request_terminal_error_is_still_cached(tmp_path):
+    """The abort must not swallow genuine per-question terminal failures."""
+    from idq.config import ModelSpec
+
+    refuser = ModelSpec(label="r", model_string="mock/refuser", served_by="mock")
+    qs = FixtureAdapter(n=5).load()
+    cache_path = str(tmp_path / "cache.jsonl")
+
+    stats = collect(qs, cfg(model=refuser), MockProvider(seed=1),
+                    ResponseCache(cache_path), verbose=False)
+    assert stats.terminal_errors == 5
+    assert len(ResponseCache(cache_path)) == 5
