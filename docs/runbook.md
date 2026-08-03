@@ -206,6 +206,24 @@ python -m idq.cli analyze --scored results/scored.jsonl \
   --markdown results/tables.md --json-out results/report.json
 ```
 
+Create the deterministic per-question artifact that is safe to commit publicly:
+
+```bash
+python -m idq.cli export-public \
+  --scored results/inkling-blind-scored.jsonl \
+  --scored results/inkling-clean-scored.jsonl \
+  --out study/public-results/results.jsonl
+```
+
+This offline command uses a fail-closed field allowlist. It includes opaque
+question IDs, outcomes, token/cost/latency measurements, and serving/configuration
+provenance. It excludes prompts, annotations, response and reasoning text, raw
+provider responses, image manifests and local paths, credentials, cache keys,
+and scene/frame IDs. The command validates all rows before atomically replacing
+the output, sorts canonical JSON lines for byte-for-byte reproducibility, and
+prints the row count and SHA-256 digest. Generate this file from rows scored with
+`--adapter drivelm_converted`; never use `--adapter drivelm` on DriveLM train.
+
 Interrupt any of this freely. The cache is append-only with an fsync per
 record; rerunning the same command resumes and re-pays for nothing.
 

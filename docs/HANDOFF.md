@@ -52,7 +52,7 @@ claim drift toward "LLM in the control loop."
 ## Current state
 
 Repo: `~/Developer/can-inkling-drive`, public on GitHub, CI green.
-188 tests pass offline with no API key and no network.
+197 tests pass offline with no API key and no network.
 
 | step | state |
 |---|---|
@@ -60,7 +60,7 @@ Repo: `~/Developer/can-inkling-drive`, public on GitHub, CI green.
 | 2. Provider selection | done — Baseten |
 | 3. DriveLM data | done, downloaded, **but see the surprise below** |
 | 4. 20-call pilot | **done — results below** |
-| 5. Scale-up | in progress — Inkling blind conditions collected and scored |
+| 5. Scale-up | in progress — Inkling blind conditions complete; clean is 238/600 |
 
 ### Layout
 
@@ -266,10 +266,45 @@ Publication-oriented details, limitations, and artifact hashes are in
 `study/runs/2026-08-01-inkling-blind.json`; raw and scored rows remain under the
 gitignored `results/` directory.
 
+## Baseten credit extension (2026-08-03, git_sha a6eac60)
+
+The owner authorized the remaining Baseten balance under explicit small
+ceilings. The 42 missing `blind_tags` rows were completed for $0.0143708, so
+both blind conditions now have 600/600 valid rows. Full blind accuracy is
+0.5433 with tags and 0.5200 without tags. The paired annotation-leakage effect
+is +0.0233, bootstrap 95% CI [-0.0233, +0.0700], exact McNemar p=0.3556.
+
+The clean condition then ran until its $0.50 ceiling stopped it: 238/600
+successful calls, zero errors, $0.50175085 measured cost. Accuracy is 143/238 =
+0.6008, bootstrap 95% CI [0.5378, 0.6639]. On these same 238 IDs, clean minus
+`blind_tags` is +0.0420 and clean minus `blind_notags` is +0.1134.
+
+**Do not promote those clean contrasts to final confirmatory findings.** The
+budget-stopped prefix is 128 perception versus 110 planning, rather than the
+frozen cohort's exact task balance. Details and the explicit interim caveat are
+in `docs/results-log.md` and
+`study/runs/2026-08-03-inkling-credit-extension.json`.
+
+The extension cost $0.51612165; cumulative measured project spend is
+$0.90590565. Approximately $0.044 of the reported credit was deliberately left
+as a safety buffer. Do not make another Baseten call without a new explicit
+authorization and ceiling.
+
+A tested, fail-closed public exporter now writes allowlisted question-level
+metrics without prompts, response text, reasoning text, images, paths, source
+IDs, provider payloads, cache keys, or credentials. The current 1,438-row
+public artifact is
+`study/public-results/inkling-through-2026-08-03.jsonl`, SHA-256
+`541411e301386344e1a4777856cffcf754f3f1c86bfde1bd718c499bce0afdbb`.
+Raw caches and richer scored rows remain local under gitignored `results/`.
+
 ## Immediate next step
 
-Do not spend more merely to fill the 42 missing tagged rows; the matched
-558-question comparison is the defensible budget-bounded analysis. The official
+Do not spend the small remaining Baseten buffer. The next useful paid Inkling
+step, after a refill, is to finish the remaining 362 clean rows under a ceiling
+of roughly $0.77 based on the observed mean—not to start corruption yet. A full
+balanced clean cohort is needed before interpreting the grounding decomposition.
+The official
 DriveLM train-image archive is present in the authenticated Hugging Face cache
 and extracted at `data/nuscenes/` (3.48 GB compressed; 3.50 GB of file content).
 With `--image-root data/drivelm`, all 600 cohort questions resolve their
@@ -292,11 +327,10 @@ The owner committed the image-pipeline and camera-selection changes as
 cost. The answer was incorrect and must not be interpreted at n=1. The receipt
 is `study/runs/2026-08-03-inkling-clean-smoke.json`.
 
-The two blind conditions plus this smoke cost **$0.389784** in total. If the
-smoke's usage were representative, 600 Inkling clean calls would cost about
-$1.16, but this is only a planning estimate. No scale image budget is approved.
-Do not run the Makefile's 20-call or 600-call paid targets until the owner sets
-a new explicit ceiling and the collector command includes it.
+The full blind conditions, clean smoke, and 238 formal clean calls cost
+**$0.90590565** in total. No further image budget is approved. Do not run the
+Makefile's 20-call or 600-call paid targets until the owner sets a new explicit
+ceiling and the collector command includes it.
 
 Every record carries the cohort ID, and every invocation appends a
 credential-free receipt to `results/run-log.jsonl`.

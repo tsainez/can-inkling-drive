@@ -169,3 +169,79 @@ The machine-readable receipt is
 `study/runs/2026-08-03-inkling-clean-smoke.json`. The earlier run-log hash in
 the blind-condition receipt identifies its historical append-only prefix; it
 is not expected to equal the hash after this later receipt was appended.
+
+## 2026-08-03 — Baseten credit extension
+
+The owner authorized use of the remaining Baseten credit under explicit
+collector ceilings. Collection ran from clean commit `a6eac60`, after 188
+offline tests passed. Public DriveLM data and the public Inkling model were the
+only research inputs; no client or employer data, imagery, logs, telemetry,
+hardware, or compute was used. Train annotations were loaded only through
+`--adapter drivelm_converted`.
+
+First, 42 calls completed the previously budget-stopped `blind_tags`
+condition. All 42 succeeded and cost $0.0143708. Both blind conditions now
+contain all 600 frozen-cohort questions:
+
+| condition | correct / n | accuracy | bootstrap 95% CI |
+|---|---:|---:|---:|
+| `blind_tags` | 326 / 600 | 0.5433 | [0.5033, 0.5833] |
+| `blind_notags` | 312 / 600 | 0.5200 | [0.4800, 0.5600] |
+
+The complete paired annotation-leakage estimate is +0.0233, with bootstrap
+95% CI [-0.0233, +0.0700] and exact McNemar p=0.3556. It remains
+inconclusive; the interval permits effects in both directions.
+
+The remaining authorized ceiling was applied to `clean`. The collector made
+238 successful calls with zero errors or invalid answers, then stopped before
+call 239 because measured spend had reached $0.50175085. All answers used the
+expected answer-tag extraction, and every row reported reasoning tokens.
+
+| clean partial metric | value |
+|---|---:|
+| correct / n | 143 / 238 |
+| accuracy | 0.6008 |
+| bootstrap 95% CI | [0.5378, 0.6639] |
+| prompt tokens | 383,665 |
+| completion tokens | 29,157 |
+| reasoning tokens | 26,777 |
+
+This is a budget-stopped prefix, not the preregistered full clean condition. It
+contains 128 perception and 110 planning questions, so the following paired
+comparisons are **interim exploratory evidence only**:
+
+| paired comparison on the same 238 IDs | effect | bootstrap 95% CI | exact McNemar p |
+|---|---:|---:|---:|
+| clean - `blind_tags` (image contribution) | +0.0420 | [-0.0294, +0.1134] | 0.3082 |
+| clean - `blind_notags` (total gap) | +0.1134 | [+0.0294, +0.1975] | 0.0132 |
+
+The second row is interesting, but treating it as the paper's confirmatory
+answer would be premature: the stopping point was imposed by budget, the
+prefix is not task-balanced, and 362 clean questions remain uncollected.
+
+This extension cost $0.51612165. Cumulative measured project spend, including
+the blind runs and clean smoke, is $0.90590565. No further paid call was made
+after the ceiling stop.
+
+### Public question-level artifact
+
+`study/public-results/inkling-through-2026-08-03.jsonl` contains 1,438
+deterministically sorted, publication-safe rows: 600 `blind_tags`, 600
+`blind_notags`, and 238 clean. Its SHA-256 is
+`541411e301386344e1a4777856cffcf754f3f1c86bfde1bd718c499bce0afdbb`.
+
+The exporter uses a fixed allowlist and excludes prompts, source annotations,
+response and reasoning text, images and local paths, scene and frame IDs,
+provider payloads, cache keys, and credentials. Raw caches and richer scored
+rows remain gitignored under `results/`. The machine-readable aggregate receipt
+is `study/runs/2026-08-03-inkling-credit-extension.json`.
+
+Current local artifact hashes:
+
+| artifact | SHA-256 |
+|---|---|
+| `results/inkling-blind-cache.jsonl` | `c652cb2c422e21c6d35742829b4a32a443fa3e9d83a550c7458412753e81e8a7` |
+| `results/inkling-blind-scored.jsonl` | `4216a66a1dd94096a7bb2ea5671e6c024a04adba4d7682ded0f68450d5d32859` |
+| `results/inkling-clean-cache.jsonl` | `1e84c1cdc86d4ee91075dd25311f0c6a34b1839590dc576ffad7d9a254622f9f` |
+| `results/inkling-clean-scored.jsonl` | `b7a90c3a47bbf6ae04954fc9960d02e9ae97522149b85c54c126822e3a934138` |
+| `results/run-log.jsonl` | `eea1cfcf21cdfe5f869d17a48d7035feb6605e039cc30035c967d558370de94b` |

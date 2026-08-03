@@ -3,6 +3,7 @@
     python -m idq.cli inspect  --data data/drivelm/v1_1_train_nus.json
     python -m idq.cli collect  --adapter fixture --provider mock --condition blind_tags
     python -m idq.cli score    --cache results/cache.jsonl --out results/scored.jsonl
+    python -m idq.cli export-public --scored results/scored.jsonl
     python -m idq.cli analyze  --scored results/scored.jsonl
 """
 
@@ -292,6 +293,17 @@ def cmd_score(args) -> None:
     }, indent=2))
 
 
+def cmd_export_public(args) -> None:
+    """Write the privacy-reviewed public projection of scored rows."""
+    from .public_results import export_public_results
+
+    scored_paths = args.scored or ["results/scored.jsonl"]
+    rows = (row for path in scored_paths for row in read_rows(path))
+    receipt = export_public_results(rows, args.out)
+    receipt["sources"] = scored_paths
+    print(json.dumps(receipt, indent=2))
+
+
 def _primary(args) -> tuple[str, str] | None:
     """--primary "inkling,qwen3-235b" designates the preregistered comparison.
 
@@ -449,6 +461,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--cache", default="results/cache.jsonl")
     sp.add_argument("--out", default="results/scored.jsonl")
     sp.set_defaults(func=cmd_score)
+
+    sp = sub.add_parser("export-public")
+    sp.add_argument(
+        "--scored",
+        action="append",
+        default=None,
+        help="scored JSONL input; repeat for multiple conditions or models",
+    )
+    sp.add_argument("--out", default="study/public-results/results.jsonl")
+    sp.set_defaults(func=cmd_export_public)
 
     sp = sub.add_parser("analyze")
     sp.add_argument("--scored", default="results/scored.jsonl")

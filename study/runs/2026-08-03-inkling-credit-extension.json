@@ -1,0 +1,161 @@
+{
+  "schema": 1,
+  "study_date_local": "2026-08-03",
+  "purpose": "Complete the Inkling blind conditions and spend a bounded Baseten credit balance on the clean-image condition.",
+  "ip_boundary": "Public DriveLM data and public model only; no client or employer data, imagery, logs, telemetry, hardware, or compute.",
+  "git_sha": "a6eac60",
+  "git_dirty_during_collection": false,
+  "cohort_id": "d0c80605189e33dc2b84884c3a5a30a7018f5669230dbdc1b6a4222082c71dc6",
+  "adapter": "drivelm_converted",
+  "model_label": "inkling",
+  "model_string": "thinkingmachines/inkling",
+  "served_model": "thinkingmachines/inkling",
+  "served_by": "baseten",
+  "quantization": "unknown",
+  "decode": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "seed": 0,
+    "max_tokens": 2048,
+    "thinking_effort": "medium"
+  },
+  "pricing": {
+    "usd_per_1m_input": 1.0,
+    "usd_per_1m_output": 4.05,
+    "blind_price_quoted_on": "2026-07-31",
+    "clean_price_quoted_on": "2026-08-03"
+  },
+  "collection": {
+    "blind_tags_top_up": {
+      "finished_utc": "2026-08-03T17:28:20Z",
+      "cached_hits": 558,
+      "calls_made": 42,
+      "successful_rows": 42,
+      "terminal_errors": 0,
+      "retryable_failures": 0,
+      "invalid_rows": 0,
+      "measured_usd": 0.0143708,
+      "final_condition_rows": 600,
+      "stop_reason": "cohort complete"
+    },
+    "clean": {
+      "finished_utc": "2026-08-03T17:44:32Z",
+      "calls_made": 238,
+      "successful_rows": 238,
+      "target_rows": 600,
+      "terminal_errors": 0,
+      "retryable_failures": 0,
+      "invalid_rows": 0,
+      "measured_usd": 0.50175085,
+      "stop_reason": "spending ceiling reached",
+      "prompt_tokens": 383665,
+      "completion_tokens": 29157,
+      "reasoning_tokens": 26777,
+      "task_counts": {
+        "perception": 128,
+        "planning": 110
+      },
+      "gold_letter_counts": {
+        "A": 120,
+        "B": 118
+      },
+      "camera_counts": {
+        "CAM_FRONT": 90,
+        "CAM_BACK": 54,
+        "CAM_FRONT_LEFT": 41,
+        "CAM_FRONT_RIGHT": 23,
+        "CAM_BACK_LEFT": 15,
+        "CAM_BACK_RIGHT": 15
+      }
+    },
+    "extension_measured_usd": 0.51612165,
+    "cumulative_measured_project_spend_usd": 0.90590565
+  },
+  "condition_summaries": {
+    "blind_tags": {
+      "n": 600,
+      "correct": 326,
+      "accuracy": 0.5433333333333333,
+      "bootstrap_ci_95": [
+        0.5033333333333333,
+        0.5833333333333334
+      ]
+    },
+    "blind_notags": {
+      "n": 600,
+      "correct": 312,
+      "accuracy": 0.52,
+      "bootstrap_ci_95": [
+        0.48,
+        0.56
+      ]
+    },
+    "clean_partial": {
+      "n": 238,
+      "correct": 143,
+      "accuracy": 0.6008403361344538,
+      "bootstrap_ci_95": [
+        0.5378151260504201,
+        0.6638655462184874
+      ]
+    }
+  },
+  "paired_interim_analysis": {
+    "warning": "The clean condition is a budget-stopped, task-unbalanced prefix. These comparisons are exploratory interim evidence, not final confirmatory claims.",
+    "n": 238,
+    "image_contribution_clean_minus_blind_tags": {
+      "effect": 0.04201680672268908,
+      "bootstrap_ci_95": [
+        -0.029411764705882353,
+        0.1134453781512605
+      ],
+      "mcnemar_exact_p": 0.30816823194368076
+    },
+    "total_gap_clean_minus_blind_notags": {
+      "effect": 0.1134453781512605,
+      "bootstrap_ci_95": [
+        0.029411764705882353,
+        0.19747899159663865
+      ],
+      "mcnemar_exact_p": 0.013233607758826317
+    }
+  },
+  "complete_blind_annotation_leakage": {
+    "n": 600,
+    "effect_blind_tags_minus_blind_notags": 0.023333333333333334,
+    "bootstrap_ci_95": [
+      -0.023333333333333334,
+      0.07
+    ],
+    "mcnemar_exact_p": 0.35558517636599485
+  },
+  "quality": {
+    "all_new_calls_status_success": true,
+    "all_answers_extracted_by_answer_tag": true,
+    "reasoning_tokens_reported_fraction": 1.0,
+    "served_model_consistent": true
+  },
+  "public_export": {
+    "schema": "idq.public-result",
+    "schema_version": 1,
+    "rows": 1438,
+    "path": "study/public-results/inkling-through-2026-08-03.jsonl",
+    "sha256": "541411e301386344e1a4777856cffcf754f3f1c86bfde1bd718c499bce0afdbb",
+    "privacy_boundary": "Allowlisted metrics and opaque provenance only; no prompts, annotations, response or reasoning text, images, local paths, scene or frame IDs, provider payloads, cache keys, or credentials."
+  },
+  "artifact_sha256": {
+    "results/inkling-blind-cache.jsonl": "c652cb2c422e21c6d35742829b4a32a443fa3e9d83a550c7458412753e81e8a7",
+    "results/inkling-blind-scored.jsonl": "4216a66a1dd94096a7bb2ea5671e6c024a04adba4d7682ded0f68450d5d32859",
+    "results/inkling-clean-cache.jsonl": "1e84c1cdc86d4ee91075dd25311f0c6a34b1839590dc576ffad7d9a254622f9f",
+    "results/inkling-clean-scored.jsonl": "b7a90c3a47bbf6ae04954fc9960d02e9ae97522149b85c54c126822e3a934138",
+    "results/run-log.jsonl": "eea1cfcf21cdfe5f869d17a48d7035feb6605e039cc30035c967d558370de94b",
+    "study/public-results/inkling-through-2026-08-03.jsonl": "541411e301386344e1a4777856cffcf754f3f1c86bfde1bd718c499bce0afdbb"
+  },
+  "limitations": [
+    "The clean condition stopped at 238 of 600 because of the spending ceiling.",
+    "The 238-row prefix is 128 perception versus 110 planning and is therefore not the preregistered balanced full-cohort analysis.",
+    "The clean paired effects and p-values are interim and must not be presented as final confirmatory results.",
+    "Provider output is not fully deterministic even with temperature 0 and a fixed seed.",
+    "The study evaluates slow scene reasoning and decision explanation, not closed-loop low-level vehicle control."
+  ]
+}
