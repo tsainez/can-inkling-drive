@@ -1,0 +1,130 @@
+{
+  "schema": 1,
+  "study_date_local": "2026-08-01",
+  "run_finished_utc": "2026-08-02T04:34:59Z",
+  "research_question": "RQ3 annotation leakage: accuracy(blind_tags) - accuracy(blind_notags)",
+  "ip_boundary": "Public DriveLM data and public model only; no client or employer data, imagery, logs, telemetry, hardware, or compute.",
+  "git_sha": "12a2bde",
+  "git_dirty_during_collection": false,
+  "cohort_id": "d0c80605189e33dc2b84884c3a5a30a7018f5669230dbdc1b6a4222082c71dc6",
+  "adapter": "drivelm_converted",
+  "model_label": "inkling",
+  "model_string": "thinkingmachines/inkling",
+  "served_model": "thinkingmachines/inkling",
+  "served_by": "baseten",
+  "quantization": "unknown",
+  "decode": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "seed": 0,
+    "max_tokens": 2048,
+    "thinking_effort": "medium"
+  },
+  "pricing": {
+    "usd_per_1m_input": 1.0,
+    "usd_per_1m_output": 4.05,
+    "price_quoted_on": "2026-07-31"
+  },
+  "collection": {
+    "blind_tags": {
+      "successful_rows": 558,
+      "target_rows": 600,
+      "terminal_errors": 0,
+      "retryable_failures": 0,
+      "invalid_rows": 0,
+      "measured_usd": 0.19493805,
+      "stop_reason": "spending ceiling reached"
+    },
+    "blind_notags": {
+      "successful_rows": 600,
+      "target_rows": 600,
+      "terminal_errors": 0,
+      "retryable_failures": 0,
+      "invalid_rows": 0,
+      "measured_usd": 0.192912,
+      "stop_reason": "cohort complete"
+    },
+    "total_successful_rows": 1158,
+    "total_measured_usd": 0.38785005
+  },
+  "matched_analysis": {
+    "n": 558,
+    "task_counts": {
+      "perception": 279,
+      "planning": 279
+    },
+    "gold_letter_counts": {
+      "A": 276,
+      "B": 282
+    },
+    "blind_tags": {
+      "correct": 301,
+      "accuracy": 0.5394265232974911
+    },
+    "blind_notags": {
+      "correct": 293,
+      "accuracy": 0.525089605734767
+    },
+    "tag_effect": 0.014336917562724039,
+    "tag_effect_bootstrap_ci_95": [
+      -0.032258064516129004,
+      0.06093189964157708
+    ],
+    "mcnemar_exact_p": 0.6039706597292289,
+    "pair_counts": {
+      "both_correct": 206,
+      "both_incorrect": 170,
+      "tags_only_correct": 95,
+      "notags_only_correct": 87
+    }
+  },
+  "condition_summaries": {
+    "blind_tags": {
+      "n": 558,
+      "correct": 301,
+      "accuracy": 0.5394265232974911,
+      "bootstrap_ci_95": [
+        0.4982078853046595,
+        0.5806451612903226
+      ],
+      "mean_reasoning_tokens": 48.818996415770606,
+      "median_reasoning_tokens": 45.0,
+      "p95_reasoning_tokens": 87.29999999999995,
+      "usd_per_correct": 0.000648
+    },
+    "blind_notags": {
+      "n": 600,
+      "correct": 312,
+      "accuracy": 0.52,
+      "bootstrap_ci_95": [
+        0.48,
+        0.56
+      ],
+      "mean_reasoning_tokens": 45.06666666666667,
+      "median_reasoning_tokens": 36.0,
+      "p95_reasoning_tokens": 83.0,
+      "usd_per_correct": 0.000618
+    }
+  },
+  "quality": {
+    "all_rows_status_success": true,
+    "all_answers_extracted_by_answer_tag": true,
+    "reasoning_tokens_reported_fraction": 1.0,
+    "served_model_consistent": true
+  },
+  "artifact_sha256": {
+    "results/inkling-blind-cache.jsonl": "b6f315cc0c576548b191b3ba419349b2cc9b014f58150f8485276d35e4a802ee",
+    "results/inkling-blind-scored.jsonl": "3f4292ce1805854adf70dfc64efd7325378107af37be58657626bca0d9e4b6d1",
+    "results/inkling-blind-report.json": "54aca789496b189e57e3c4a1ff28bc749059b79d0de6928bfee19ba6d8e0358f",
+    "results/inkling-blind-tables.md": "ca5954f9d1933da35958ddcaf3ea485203287220b46afbb20a9f248080834b1c",
+    "results/run-log.jsonl": "35505f7da082369612f5fc89449ffd8eee030dc7366462b8e3f579bac3d8792d",
+    "study/cohorts/drivelm-balanced-600.json": "d419165a4b850e66ede64cd5928f570a206127647518979cb3bf0bff99c0c3e8"
+  },
+  "limitations": [
+    "The blind_tags condition stopped at 558 of 600 because of the spending ceiling.",
+    "The confirmatory condition contrast therefore uses the 558 shared question IDs.",
+    "The matched prefix is task-balanced but is 276 A versus 282 B, not exactly letter-balanced.",
+    "No clean image condition was collected, so this run does not estimate image contribution or the total grounding gap.",
+    "Provider output is not fully deterministic even with temperature 0 and a fixed seed."
+  ]
+}

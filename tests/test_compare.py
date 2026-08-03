@@ -117,6 +117,47 @@ def test_retention_is_undefined_when_the_baseline_is_at_chance():
     data = rows(flags(25, 100), condition="clean") + rows(flags(20, 100), condition="corrupt")
     res = robustness(data, model="m", n_boot=400)
     assert math.isnan(res.above_chance_retention)
+    assert "no signal to retain" in res.retention_note
+
+
+def test_retention_is_undefined_when_the_baseline_only_looks_above_chance():
+    """The bug this guards against, from real data.
+
+    Binary questions, chance 0.50. Baseline 52.5% and degraded 53.9% are both
+    indistinguishable from chance, but 2.5pp of headroom in the denominator
+    produced "157% of above-chance accuracy retained" — a number generated
+    entirely by dividing noise by noise.
+    """
+    data = (
+        rows(flags(315, 600), condition="clean", n_options=2)
+        + rows(flags(323, 600), condition="corrupt", n_options=2,
+               corruption="fog", corruption_severity=3)
+    )
+    res = robustness(data, model="m", n_boot=2000)
+
+    assert res.chance == pytest.approx(0.50)
+    assert res.accuracy_baseline > res.chance          # numerically above chance
+    assert math.isnan(res.above_chance_retention)      # but not reportably so
+    assert "not distinguishable from chance" in res.retention_note
+
+
+def test_retention_is_reported_when_the_baseline_is_clearly_above_chance():
+    """The guard must not suppress a legitimate retention figure.
+
+    Baseline 80% against chance 50% is 30pp of headroom; degraded 65% keeps
+    (0.65-0.50)/(0.80-0.50) = 0.50 of it.
+    """
+    data = (
+        rows(flags(160, 200), condition="clean", n_options=2)
+        + rows(flags(130, 200), condition="corrupt", n_options=2, corruption="fog")
+    )
+    res = robustness(data, model="m", n_boot=2000)
+
+    assert res.chance == pytest.approx(0.50)
+    assert res.accuracy_baseline == pytest.approx(0.80)
+    assert res.accuracy_degraded == pytest.approx(0.65)
+    assert res.above_chance_retention == pytest.approx(0.50)
+    assert res.retention_note == ""
 
 
 def test_robustness_surfaces_a_shift_into_invalid_output():

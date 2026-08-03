@@ -72,6 +72,11 @@ https://huggingface.co/datasets/OpenDriveLab/DriveLM/blob/main/drivelm_nus_imgs_
 Unzip so paths resolve as `<image_root>/samples/CAM_FRONT/<file>.jpg`, then pass
 `--image-root`. Blind conditions need none of this.
 
+As checked on 2026-08-01, an unauthenticated request to the official image-file
+endpoint returns HTTP 401. Complete the maintainers' access step and download
+while authenticated. Do not work around the gate with an unofficial mirror;
+the public-data boundary includes honoring the dataset's access process.
+
 ## Step 4: the 20-call pilot
 
 ### Pre-flight — do these before the first paid call

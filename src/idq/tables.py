@@ -166,7 +166,17 @@ def efficiency(sections: dict) -> str:
 def robustness(sections: dict) -> str:
     """RQ4, part one: per-model accuracy loss under degradation."""
     rows = []
+    notes = []
+    skipped = []
     for model, r in sorted(sections.get("robustness", {}).items()):
+        # A robustness row without a corruption is not a robustness result.
+        # Comparing two undegraded conditions here would print a "degradation"
+        # that never happened.
+        if not r.get("corruption"):
+            skipped.append(f"`{model}` ({r.get('degraded_condition')})")
+            continue
+        if r.get("retention_note"):
+            notes.append(f"- `{model}`: retention not reported — {r['retention_note']}")
         ci_d = r.get("ci_delta") or ()
         rows.append([
             model, f"{r['corruption'] or DASH} s{r['corruption_severity']}",
@@ -178,11 +188,28 @@ def robustness(sections: dict) -> str:
             pct(r["above_chance_retention"]),
             pct(r["invalid_rate_delta"]),
         ])
-    return table(
+    if not rows:
+        msg = "_No corruption condition has been collected, so robustness is not evaluable._"
+        if skipped:
+            msg += (
+                "\n\n> Suppressed "
+                + ", ".join(skipped)
+                + " — the requested degraded condition carries no corruption, so any"
+                " \"degradation\" reported there would be a comparison between two"
+                " undegraded conditions."
+            )
+        return msg
+
+    out = table(
         ["Model", "Corruption", "n", "Baseline %", "Degraded %", "Δ pp", "95% CI",
          "p", "Above-chance retained %", "Δ invalid pp"],
         rows,
     )
+    if notes:
+        out += "\n\n" + "\n".join(notes)
+    if skipped:
+        out += "\n\n> Suppressed (no corruption applied): " + ", ".join(skipped) + "."
+    return out
 
 
 def ranking_stability(sections: dict) -> str:

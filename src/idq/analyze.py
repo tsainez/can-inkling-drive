@@ -315,6 +315,8 @@ class RobustnessResult:
     p_value: float = float("nan")
     chance: float = float("nan")
     above_chance_retention: float = float("nan")
+    # Why retention is undefined, when it is. Empty when the ratio is reportable.
+    retention_note: str = ""
     invalid_rate_baseline: float = float("nan")
     invalid_rate_degraded: float = float("nan")
     invalid_rate_delta: float = float("nan")
@@ -392,7 +394,31 @@ def robustness(
     chance = chance_accuracy(base_shared)
     acc_b, acc_d = float(a.mean()), float(d.mean())
     headroom = acc_b - chance
-    retention = (acc_d - chance) / headroom if headroom > 0 else float("nan")
+
+    # Retention divides one above-chance margin by another. When the baseline
+    # margin is small the denominator is mostly noise, and the ratio explodes:
+    # a baseline of 52.5% against chance 50% has 2.5pp of headroom, so a
+    # degraded score of 53.9% reports "157% retained" - a number that says
+    # nothing except that both conditions were at chance. Requiring the
+    # baseline to be *statistically* above chance, not merely numerically
+    # above it, is what makes the ratio mean something.
+    base_ci = bootstrap_ci(a, n_boot=n_boot, seed=seed)
+    retention_note = ""
+    if headroom <= 0:
+        retention = float("nan")
+        retention_note = (
+            f"baseline {acc_b:.3f} is at or below chance {chance:.3f}; "
+            "there was no signal to retain"
+        )
+    elif base_ci[0] <= chance:
+        retention = float("nan")
+        retention_note = (
+            f"baseline {acc_b:.3f} is not distinguishable from chance {chance:.3f} "
+            f"(95% CI lower bound {base_ci[0]:.3f}); the retention ratio would be "
+            "noise divided by noise"
+        )
+    else:
+        retention = (acc_d - chance) / headroom
 
     return RobustnessResult(
         model=model,
@@ -408,6 +434,7 @@ def robustness(
         p_value=mcnemar_exact(xa, xb).p_value,
         chance=chance,
         above_chance_retention=retention,
+        retention_note=retention_note,
         invalid_rate_baseline=inv_base,
         invalid_rate_degraded=inv_deg,
         invalid_rate_delta=inv_deg - inv_base,

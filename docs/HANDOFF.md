@@ -1,4 +1,4 @@
-# Handoff — state of the project as of 2026-07-31
+# Handoff — state of the project as of 2026-08-01
 
 Read this before touching anything. Several things in this repo contradict what
 you would reasonably assume, and two other docs contain claims that are now
@@ -51,7 +51,7 @@ claim drift toward "LLM in the control loop."
 
 ## Current state
 
-Repo: `~/Developer/can-inkling-drive`, public on GitHub, 3 commits, CI green.
+Repo: `~/Developer/can-inkling-drive`, public on GitHub, CI green.
 177 tests pass offline with no API key and no network.
 
 | step | state |
@@ -60,7 +60,7 @@ Repo: `~/Developer/can-inkling-drive`, public on GitHub, 3 commits, CI green.
 | 2. Provider selection | done — Baseten |
 | 3. DriveLM data | done, downloaded, **but see the surprise below** |
 | 4. 20-call pilot | **done — results below** |
-| 5. Scale-up | prepared — cohort and preregistration locked; paid calls not started |
+| 5. Scale-up | in progress — Inkling blind conditions collected and scored |
 
 ### Layout
 
@@ -214,8 +214,8 @@ run three and characterise it — the latter triples cost.
 
 At $0.000322/call, 600 questions × 2 blind conditions × 5 models = 6,000 calls
 ≈ **$1.93**. All four conditions ≈ $3.90, though image inputs will raise the
-input-token count substantially. The owner has ~$1.00 in free Baseten credit and
-has not added a payment card.
+input-token count substantially. A payment card is now attached to the Baseten
+account, but every collection still needs an explicit small spending ceiling.
 
 ---
 
@@ -246,17 +246,40 @@ Venue remains open; it does not affect collection.
 
 ---
 
+## Inkling blind-condition results (2026-08-01)
+
+Collection ran from clean commit `12a2bde` with the frozen cohort and explicit
+spending ceilings. `blind_tags` stopped at 558/600 when its ceiling was reached;
+`blind_notags` completed 600/600. All 1,158 calls succeeded, all answers were
+valid answer-tag extractions, and all rows reported reasoning tokens. Total
+measured spend was **$0.387850**.
+
+The paired comparison uses the 558 shared question IDs. Tagged accuracy was
+301/558 = 0.5394; no-tag accuracy was 293/558 = 0.5251. Annotation leakage was
++0.0143, paired bootstrap 95% CI [-0.0323, +0.0609], exact McNemar p=0.6040.
+This is inconclusive and should not be described as evidence that the true
+effect is zero. Neither blind condition substitutes for the uncollected clean
+image condition.
+
+Publication-oriented details, limitations, and artifact hashes are in
+`docs/results-log.md`. The machine-readable aggregate receipt is
+`study/runs/2026-08-01-inkling-blind.json`; raw and scored rows remain under the
+gitignored `results/` directory.
+
 ## Immediate next step
 
-Commit the complete study state first. Live collection now refuses a dirty tree
-because the last commit SHA cannot identify uncommitted code. Then collect the
-same frozen 600-question cohort for Inkling in `blind_tags` and
-`blind_notags`. Do not spend another 20 calls on an accuracy pilot: the payload
-already passed, and n=20 accuracy is uninformative.
+Do not spend more merely to fill the 42 missing tagged rows; the matched
+558-question comparison is the defensible budget-bounded analysis. First review
+and commit the aggregate receipt and results log. The official DriveLM training
+image archive is about 450 MB, but its unauthenticated endpoint returned HTTP
+401 on 2026-08-01 and this machine has no Hugging Face login tooling configured.
+Complete the maintainers' access step and download the official archive; do not
+use an unofficial mirror to bypass the gate. Then verify the clean/corrupt image
+path entirely offline before proposing a single explicitly capped smoke call or
+any larger RQ3/RQ4 image collection.
 
-Every new record carries the cohort ID, and every invocation appends a
-credential-free receipt to `results/run-log.jsonl`. The full mock rehearsal
-completed 600/600 calls, scoring, analysis, and paper-table rendering offline.
+Every record carries the cohort ID, and every invocation appends a
+credential-free receipt to `results/run-log.jsonl`.
 
 Images (`drivelm_nus_imgs_train.zip` from the DriveLM HuggingFace repo) are
 needed only for `clean` and `corrupt`. Do **not** use nuScenes-mini; DriveLM

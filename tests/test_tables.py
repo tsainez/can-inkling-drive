@@ -86,6 +86,31 @@ def test_every_section_renders_for_a_complete_run():
     assert "not a property of the" in md  # the price caveat travels with the table
 
 
+def test_robustness_table_refuses_to_report_a_degradation_that_never_happened():
+    """Regression: two blind conditions were once passed as baseline/degraded.
+
+    No corruption was applied, so the table printed a "degradation" that was
+    really a comparison of two undegraded conditions — and, because both sat at
+    chance, an above-chance-retained figure of 157%.
+    """
+    data = (
+        rows(flags(315, 600), model="inkling", condition="blind_notags", n_options=2)
+        + rows(flags(323, 600), model="inkling", condition="blind_tags", n_options=2)
+    )
+    md = render_markdown(
+        summarize_run(
+            data, baseline_condition="blind_notags",
+            degraded_condition="blind_tags", n_boot=300,
+        ).sections,
+        title="T",
+    )
+
+    assert "## RQ4 — robustness under degradation" in md
+    assert "not evaluable" in md
+    assert "Suppressed" in md
+    assert "157" not in md
+
+
 def test_cost_table_marks_an_unstamped_price_in_the_table_itself():
     """Not only in the warnings list: someone will copy just the table."""
     data = rows(flags(50, 100), usd_per_1m_input=1.0, usd_per_1m_output=2.0,
