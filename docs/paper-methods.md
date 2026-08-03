@@ -135,6 +135,15 @@ Four conditions per model.
 | `blind_notags` | withheld | replaced |
 | `corrupt` | degraded | present |
 
+For each image-bearing question, we send exactly the camera named in its object
+tag. We do not use a fixed front view: 370 of the 600 frozen questions name a
+side or rear camera, so doing so would silently show the wrong scene evidence.
+We also do not send all six views, which would multiply image cost and alter the
+task. The frozen cohort contains 230 front, 164 back, 81 front-left, 70
+front-right, 32 back-right, and 23 back-left references. Before any provider
+call, the collector resolves and hashes every required image; a missing view
+aborts the condition without spending money.
+
 **Why two blind conditions.** DriveLM question text embeds object references of
 the form `<c1,CAM_FRONT,1088.3,497.5>`, naming a camera and a pixel coordinate.
 A text-only condition that leaves these in place is not blind: the annotation

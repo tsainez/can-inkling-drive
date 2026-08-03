@@ -56,6 +56,11 @@ chance is 0.50. Claims do not extend to DriveLM or driving QA generally.
 **Three conditions per model, plus a fourth for grounding.** `clean`,
 `blind_tags`, `blind_notags`, `corrupt`.
 
+Image-bearing conditions send the single camera named in each DriveLM object
+tag. A fixed `CAM_FRONT` view would be wrong for 370/600 frozen questions, while
+sending all six cameras would inflate cost and change the task. The collector
+validates every required view before its first paid call.
+
 The two blind conditions exist because DriveLM question text embeds object
 references like `<c1,CAM_FRONT,1088.3,497.5>`. Those name a camera and a pixel
 location, so a text-only run that leaves them in is not actually blind. Running

@@ -88,3 +88,56 @@ def test_unknown_corruption_and_severity_rejected(img):
         apply_corruption(img, "snow", 3)
     with pytest.raises(ValueError):
         apply_corruption(img, "fog", 9)
+
+
+def test_images_are_sent_at_native_resolution_so_coordinates_stay_true(tmp_path):
+    """Regression: the clean condition once pointed the model at the wrong pixel.
+
+    DriveLM refers to objects by absolute coordinate in the source frame
+    (`<c1,CAM_FRONT,197.5,517.5>`). The harness used to downscale 1600x900 to
+    1024x576 without rewriting those numbers, so every reference missed its
+    object by ~186 pixels vertically and the model answered from priors.
+    """
+    import base64, io
+    import numpy as np
+    from PIL import Image
+
+    from idq.images import ImageRef, load_and_encode
+    from idq.hashing import sha256_file
+
+    rng = np.random.default_rng(0)
+    src = rng.integers(0, 256, size=(900, 1600, 3), dtype=np.uint8)
+    path = tmp_path / "frame.jpg"
+    Image.fromarray(src).save(path, format="JPEG", quality=95)
+
+    refs = [ImageRef("CAM_FRONT", str(path), sha256_file(str(path)))]
+    data_url = load_and_encode(refs)[0]
+    raw = base64.b64decode(data_url.split(",", 1)[1])
+    with Image.open(io.BytesIO(raw)) as sent:
+        assert sent.size == (1600, 900), (
+            f"image was resized to {sent.size}; DriveLM coordinates are in "
+            "1600x900 space and would no longer point at their objects"
+        )
+
+
+def test_preprocessing_parameters_are_in_the_cache_key(tmp_path):
+    """A resize change must fork the cache, not silently reuse old responses."""
+    import numpy as np
+    from PIL import Image
+
+    from idq.images import ImageRef, manifest_hash
+    from idq.hashing import sha256_file
+
+    rng = np.random.default_rng(1)
+    path = tmp_path / "f.jpg"
+    Image.fromarray(rng.integers(0, 256, size=(900, 1600, 3), dtype=np.uint8)).save(
+        path, format="JPEG"
+    )
+    refs = [ImageRef("CAM_FRONT", str(path), sha256_file(str(path)))]
+
+    native = manifest_hash(refs, "", 0, max_edge=0)
+    resized = manifest_hash(refs, "", 0, max_edge=1024)
+    requality = manifest_hash(refs, "", 0, max_edge=0, jpeg_quality=60)
+
+    assert native != resized
+    assert native != requality

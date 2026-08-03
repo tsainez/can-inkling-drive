@@ -110,7 +110,9 @@ class FixtureAdapter:
                     letters=tuple(parsed_letters),
                     option_texts=tuple(parsed_texts),
                     gold_letter=rng.choice(parsed_letters),
-                    image_paths={"CAM_FRONT": f"synthetic/{i:05d}.jpg"},
+                    image_paths={
+                        cam: f"synthetic/{cam}/{i:05d}.jpg" for cam in CAMERAS
+                    },
                     raw={"synthetic": True, "question_text": full},
                 )
             )

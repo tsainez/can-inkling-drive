@@ -17,7 +17,13 @@ from . import __version__
 from .adapters.base import Question
 from .cache import ResponseCache, build_record, make_cache_key
 from .config import RunConfig
-from .images import build_manifest, load_and_encode, manifest_hash, manifest_to_json
+from .images import (
+    build_manifest,
+    load_and_encode,
+    manifest_hash,
+    manifest_to_json,
+    referenced_cameras,
+)
 from .prompts import IMAGE_CONDITIONS, format_options_block, get_prompt
 from .providers.base import RetryableError, TerminalError
 
@@ -108,6 +114,27 @@ def collect(
 
     todo = questions[:limit] if limit else questions
 
+    # Resolve and hash every required image before the first paid call. Doing
+    # this lazily inside the request loop can spend hundreds of calls before a
+    # missing side/rear view is discovered late in the cohort.
+    prepared_images: dict[str, tuple[list, str]] = {}
+    if needs_images:
+        for q in todo:
+            try:
+                refs = build_manifest(
+                    q.image_paths,
+                    root=image_root,
+                    cameras=referenced_cameras(q.stem),
+                )
+            except FileNotFoundError as exc:
+                raise ConfigurationError(
+                    f"image preflight failed for {q.question_id}: {exc}"
+                ) from exc
+            prepared_images[q.question_id] = (
+                refs,
+                manifest_hash(refs, cfg.corruption, cfg.corruption_severity),
+            )
+
     for i, q in enumerate(todo, start=1):
         stats.considered += 1
 
@@ -116,13 +143,7 @@ def collect(
         refs = []
         mhash = ""
         if needs_images:
-            try:
-                refs = build_manifest(q.image_paths, root=image_root)
-            except FileNotFoundError as exc:
-                if verbose:
-                    print(f"  skip {q.question_id}: {exc}", file=sys.stderr)
-                continue
-            mhash = manifest_hash(refs, cfg.corruption, cfg.corruption_severity)
+            refs, mhash = prepared_images[q.question_id]
 
         key = make_cache_key(
             key_fields=cfg.key_fields(),

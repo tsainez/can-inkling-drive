@@ -1,4 +1,4 @@
-# Handoff — state of the project as of 2026-08-01
+# Handoff — state of the project as of 2026-08-03
 
 Read this before touching anything. Several things in this repo contradict what
 you would reasonably assume, and two other docs contain claims that are now
@@ -52,7 +52,7 @@ claim drift toward "LLM in the control loop."
 ## Current state
 
 Repo: `~/Developer/can-inkling-drive`, public on GitHub, CI green.
-177 tests pass offline with no API key and no network.
+188 tests pass offline with no API key and no network.
 
 | step | state |
 |---|---|
@@ -269,14 +269,28 @@ gitignored `results/` directory.
 ## Immediate next step
 
 Do not spend more merely to fill the 42 missing tagged rows; the matched
-558-question comparison is the defensible budget-bounded analysis. First review
-and commit the aggregate receipt and results log. The official DriveLM training
-image archive is about 450 MB, but its unauthenticated endpoint returned HTTP
-401 on 2026-08-01 and this machine has no Hugging Face login tooling configured.
-Complete the maintainers' access step and download the official archive; do not
-use an unofficial mirror to bypass the gate. Then verify the clean/corrupt image
-path entirely offline before proposing a single explicitly capped smoke call or
-any larger RQ3/RQ4 image collection.
+558-question comparison is the defensible budget-bounded analysis. The official
+DriveLM train-image archive is present in the authenticated Hugging Face cache
+and extracted at `data/nuscenes/` (3.48 GB compressed; 3.50 GB of file content).
+With `--image-root data/drivelm`, all 600 cohort questions resolve their
+tagged camera, covering 582 unique files. The cohort references CAM_FRONT 230
+times, CAM_BACK 164, CAM_FRONT_LEFT 81, CAM_FRONT_RIGHT 70, CAM_BACK_RIGHT 32,
+and CAM_BACK_LEFT 23. The collector now chooses the camera in each object tag
+and validates every required image before making the first provider call.
+
+Clean and motion-blur severity-3 payload construction passed an offline
+one-question rehearsal on 2026-08-03: the native 1600x900 resolution was
+preserved, the clean and corrupted payloads differed, and the source image hash
+was unchanged. This rehearsal used local uncommitted image-pipeline changes and
+made zero provider calls, so it is readiness evidence rather than a collection
+receipt.
+
+The tree is currently dirty from image-pipeline, camera-selection, test,
+documentation, and Makefile changes; live collection must remain blocked until
+the owner reviews and commits them. After a clean commit, run at most one
+clean-image smoke call with a hard $0.002 ceiling to measure actual image
+billing and payload acceptance. Do not run the Makefile's 20-call or 600-call
+image targets before that measurement.
 
 Every record carries the cohort ID, and every invocation appends a
 credential-free receipt to `results/run-log.jsonl`.

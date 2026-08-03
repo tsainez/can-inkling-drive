@@ -98,3 +98,32 @@ These are provider-reported reasoning tokens, not a text-length proxy.
 
 The machine-readable aggregate receipt is
 `study/runs/2026-08-01-inkling-blind.json`.
+
+## 2026-08-03 — Image-path preflight (offline, zero cost)
+
+This was a local readiness check, not a model evaluation and not a paid
+collection.
+
+- Official Hugging Face repository: `OpenDriveLab/DriveLM`.
+- Cached snapshot: `ae973fbd4e8d4684af4ab234d504bd6c5e946868`.
+- Train-image archive: 3,483,205,396 bytes; SHA-256
+  `2cb95fafac00ca058c04735c339a183657d60962afee12d782b410c602eab936`.
+- The full ZIP passed CRC validation.
+- Correct local layout: annotations under `data/drivelm/`, images under
+  `data/nuscenes/samples/`, and collection with `--image-root data/drivelm`.
+- All 600 frozen cohort questions resolved the camera named in their object tag
+  with zero missing paths; these references cover 582 unique images. The camera
+  distribution is CAM_FRONT 230, CAM_BACK 164, CAM_FRONT_LEFT 81,
+  CAM_FRONT_RIGHT 70, CAM_BACK_RIGHT 32, and CAM_BACK_LEFT 23.
+- The collector now hashes and validates all required images before its first
+  provider call, preventing a late missing view from consuming paid calls.
+- A representative source was 1600x900. Clean encoding preserved that native
+  resolution. Motion blur at preregistered severity 3 produced different bytes,
+  while the source SHA-256 was identical before and after encoding.
+- Provider calls: 0. Cost: $0.00.
+
+The rehearsal ran at committed base `373ae67` with uncommitted image-pipeline
+changes, so its hashes are diagnostic rather than a formal study receipt. A
+paid image smoke must wait for a reviewed clean commit. Actual image-token cost
+is still unknown; estimate it with one call under a $0.002 ceiling before any
+larger clean or corrupt condition.

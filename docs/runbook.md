@@ -69,13 +69,21 @@ frames it annotates:
 https://huggingface.co/datasets/OpenDriveLab/DriveLM/blob/main/drivelm_nus_imgs_train.zip
 ```
 
-Unzip so paths resolve as `<image_root>/samples/CAM_FRONT/<file>.jpg`, then pass
-`--image-root`. Blind conditions need none of this.
+The official train archive is 3,483,205,396 bytes (about 3.48 GB decimal), not
+450 MB, and expands to a top-level `nuscenes/` directory. The annotation paths
+begin with `../nuscenes/`, matching DriveLM's published sibling-directory
+layout. With this repo's annotations at `data/drivelm/`, extract so images land
+at `data/nuscenes/samples/...`, then pass `--image-root data/drivelm`. Blind
+conditions need none of this.
 
-As checked on 2026-08-01, an unauthenticated request to the official image-file
-endpoint returns HTTP 401. Complete the maintainers' access step and download
-while authenticated. Do not work around the gate with an unofficial mirror;
-the public-data boundary includes honoring the dataset's access process.
+An unauthenticated request to the official image-file endpoint returns HTTP
+401. Complete the maintainers' access step and download while authenticated.
+Do not work around the gate with an unofficial mirror; the public-data boundary
+includes honoring the dataset's access process. On 2026-08-03 the authenticated
+Hugging Face cache and extracted copy were verified locally: all 600 frozen
+cohort questions resolve the camera named in their object tag, covering 582
+unique files. The collector validates and hashes every required image before
+the first provider call, so a missing side or rear view aborts at zero cost.
 
 ## Step 4: the 20-call pilot
 
